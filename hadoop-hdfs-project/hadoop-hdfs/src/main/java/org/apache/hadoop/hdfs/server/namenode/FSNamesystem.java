@@ -41,6 +41,8 @@ import io.hops.metadata.hdfs.entity.MetadataLogEntry;
 import io.hops.metadata.hdfs.entity.ProjectedINode;
 import io.hops.metadata.hdfs.entity.RetryCacheEntry;
 import io.hops.metadata.hdfs.entity.SubTreeOperation;
+import io.hops.metadata.s3.dal.S3PathMetaDataAccess;
+import io.hops.metadata.s3.entity.S3PathMeta;
 import io.hops.resolvingcache.Cache;
 import io.hops.security.UsersGroups;
 import io.hops.transaction.EntityManager;
@@ -8548,5 +8550,104 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   public boolean isRetryCacheEnabled(){
     return isRetryCacheEnabled;
   }
+
+    /** Start S3Guard Methods */
+    public S3PathMeta s3MetadataGetPath(final String parent, final String child, final String bucket) throws IOException {
+        return (S3PathMeta) new LightWeightRequestHandler(HDFSOperationType.S3METADATA_GET_PATH) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                return da.getPath(parent, child, bucket);
+            }
+        }.handle();
+    }
+
+    public void s3MetadataPutPath(final S3PathMeta path) throws IOException  {
+        new LightWeightRequestHandler(HDFSOperationType.S3METADATA_PUT_PATH) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                da.putPath(path);
+                return null;
+            }
+        }.handle();
+    }
+
+    public void s3MetadataDeletePath(final String parent, final String child, final String bucket) throws IOException  {
+        new LightWeightRequestHandler(HDFSOperationType.S3METADATA_DELETE_PATH) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                da.deletePath(parent, child, bucket);
+                return null;
+            }
+        }.handle();
+    }
+
+    public void s3MetadataPutPaths(final List<S3PathMeta> paths) throws IOException {
+        new LightWeightRequestHandler(HDFSOperationType.S3METADATA_PUT_PATHS) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                da.putPaths(paths);
+                return null;
+            }
+        }.handle();
+    }
+
+    public void s3MetadataDeletePaths(final List<S3PathMeta> paths) throws IOException {
+        new LightWeightRequestHandler(HDFSOperationType.S3METADATA_DELETE_PATHS) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                da.deletePaths(paths);
+                return null;
+            }
+        }.handle();
+    }
+
+    public boolean s3MetadataIsDirEmpty(final String parent, final String child, final String bucket) throws IOException {
+        return (boolean) new LightWeightRequestHandler(HDFSOperationType.S3METADATA_IS_DIR_EMPTY) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                return da.isDirEmpty(parent, child, bucket);
+            }
+        }.handle();
+    }
+
+    public void s3MetadataDeleteBucket(final String bucketName) throws IOException {
+        new LightWeightRequestHandler(HDFSOperationType.S3METADATA_DELETE_BUCKET) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                da.deleteBucket(bucketName);
+                return null;
+            }
+        }.handle();
+    }
+
+    public List<S3PathMeta> s3MetadataGetExpiredFiles(final long modTime, final String bucket) throws IOException {
+        return (List<S3PathMeta>) new LightWeightRequestHandler(HDFSOperationType.S3METADATA_GET_EXPIRED_FILES) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                return da.getExpiredFiles(modTime, bucket);
+            }
+        }.handle();
+    }
+
+    public List<S3PathMeta> s3MetadataGetPathChildren(final String parent, final String bucket) throws IOException {
+        return (List<S3PathMeta>) new LightWeightRequestHandler(HDFSOperationType.S3METADATA_GET_PATH_CHILDREN) {
+            @Override
+            public Object performTask() throws IOException {
+                S3PathMetaDataAccess da = (S3PathMetaDataAccess) HdfsStorageFactory.getDataAccess(S3PathMetaDataAccess.class);
+                return da.getPathChildren(parent, bucket);
+            }
+        }.handle();
+    }
+
+    /** END S3Guard Methods */
+    
 }
 

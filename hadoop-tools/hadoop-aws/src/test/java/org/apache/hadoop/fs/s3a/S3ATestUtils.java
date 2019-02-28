@@ -381,6 +381,9 @@ public final class S3ATestUtils {
       case TEST_S3GUARD_IMPLEMENTATION_DYNAMO:
         implClass = S3GUARD_METASTORE_DYNAMO;
         break;
+      case TEST_S3GUARD_IMPLEMENTATION_NDB:
+        implClass = S3GUARD_METASTORE_NDB;
+        break;
       case TEST_S3GUARD_IMPLEMENTATION_NONE:
         implClass = S3GUARD_METASTORE_NULL;
         break;

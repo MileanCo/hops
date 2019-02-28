@@ -24,6 +24,7 @@ import io.hops.leader_election.node.SortedActiveNodeList;
 import io.hops.metadata.hdfs.entity.EncodingPolicy;
 import io.hops.metadata.hdfs.entity.EncodingStatus;
 
+import io.hops.metadata.s3.entity.S3PathMeta;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
@@ -1382,6 +1383,51 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public void removeUserGroup(String userName, String groupName,
       boolean cacheOnly) throws IOException {
     namesystem.removeUserGroup(userName, groupName, cacheOnly);
+  }
+
+  @Override
+  public S3PathMeta s3MetadataGetPath(String parent, String child, String bucket) throws IOException {
+    return namesystem.s3MetadataGetPath(parent, child, bucket);
+  }
+
+  @Override
+  public void s3MetadataPutPath(S3PathMeta path)  throws IOException  {
+    namesystem.s3MetadataPutPath(path);
+  }
+
+  @Override
+  public void s3MetadataDeletePath(String parent, String child, String bucket) throws IOException  {
+    namesystem.s3MetadataDeletePath(parent, child, bucket);
+  }
+
+  @Override
+  public void s3MetadataPutPaths(List<S3PathMeta> paths) throws IOException  {
+    namesystem.s3MetadataPutPaths(paths);
+  }
+
+  @Override
+  public void s3MetadataDeletePaths(List<S3PathMeta> paths) throws IOException  {
+    namesystem.s3MetadataDeletePaths(paths);
+  }
+
+  @Override
+  public boolean s3MetadataIsDirEmpty(String parent, String child, String bucket) throws IOException  {
+    return namesystem.s3MetadataIsDirEmpty(parent, child, bucket);
+  }
+
+  @Override
+  public void s3MetadataDeleteBucket(String bucket) throws IOException  {
+    namesystem.s3MetadataDeleteBucket(bucket);
+  }
+
+  @Override
+  public List<S3PathMeta> s3MetadataGetExpiredFiles(long mod_time, String bucket) throws IOException  {
+    return namesystem.s3MetadataGetExpiredFiles(mod_time, bucket);
+  }
+
+  @Override
+  public List<S3PathMeta> s3MetadataGetPathChildren(String parent, String bucket) throws IOException  {
+    return namesystem.s3MetadataGetPathChildren(parent, bucket);
   }
 
   @Override // TraceAdminProtocol

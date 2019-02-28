@@ -18,22 +18,7 @@
 
 package org.apache.hadoop.fs.s3a.s3guard;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
-
 import com.google.common.collect.Sets;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -42,6 +27,12 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.S3ATestUtils;
 import org.apache.hadoop.fs.s3a.Tristate;
 import org.apache.hadoop.io.IOUtils;
+import org.junit.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Main test class for MetadataStore implementations.
@@ -171,6 +162,37 @@ public abstract class MetadataStoreTestBase extends Assert {
     if (!allowMissing()) {
       assertEquals(Sets.newHashSet(checkNodes), actual);
     }
+  }
+
+
+  @Test
+  public void testGet() throws Exception {
+    PathMetadata meta = ms.get(strToPath("/bollocks"));
+    assertNull("Don't get non-existent file", meta);
+
+    final String filePath = "/a1/b1/c1/some_file";
+    final String dirPath = "/a1/b1/c1/d1";
+    ms.put(new PathMetadata(makeFileStatus(filePath, 100)));
+    ms.put(new PathMetadata(makeDirStatus(dirPath)));
+     meta = ms.get(strToPath(filePath));
+    if (!allowMissing() || meta != null) {
+      assertNotNull("Get found file", meta);
+      verifyFileStatus(meta.getFileStatus(), 100);
+    }
+
+    if (!(ms instanceof NullMetadataStore)) {
+      ms.delete(strToPath(filePath));
+      meta = ms.get(strToPath(filePath));
+      assertTrue("Tombstone not left for deleted file", meta.isDeleted());
+    }
+
+    meta = ms.get(strToPath(dirPath));
+    if (!allowMissing() || meta != null) {
+      assertNotNull("Get found file (dir)", meta);
+      assertTrue("Found dir", meta.getFileStatus().isDirectory());
+    }
+
+
   }
 
   /**
@@ -390,33 +412,6 @@ public abstract class MetadataStoreTestBase extends Assert {
     }
   }
 
-  @Test
-  public void testGet() throws Exception {
-    final String filePath = "/a1/b1/c1/some_file";
-    final String dirPath = "/a1/b1/c1/d1";
-    ms.put(new PathMetadata(makeFileStatus(filePath, 100)));
-    ms.put(new PathMetadata(makeDirStatus(dirPath)));
-    PathMetadata meta = ms.get(strToPath(filePath));
-    if (!allowMissing() || meta != null) {
-      assertNotNull("Get found file", meta);
-      verifyFileStatus(meta.getFileStatus(), 100);
-    }
-
-    if (!(ms instanceof NullMetadataStore)) {
-      ms.delete(strToPath(filePath));
-      meta = ms.get(strToPath(filePath));
-      assertTrue("Tombstone not left for deleted file", meta.isDeleted());
-    }
-
-    meta = ms.get(strToPath(dirPath));
-    if (!allowMissing() || meta != null) {
-      assertNotNull("Get found file (dir)", meta);
-      assertTrue("Found dir", meta.getFileStatus().isDirectory());
-    }
-
-    meta = ms.get(strToPath("/bollocks"));
-    assertNull("Don't get non-existent file", meta);
-  }
 
   @Test
   public void testGetEmptyDir() throws Exception {

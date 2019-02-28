@@ -44,6 +44,12 @@
         managed by s3guard</description>
   </property>
 
+  <!-- Set default metadata store implementation -->
+  <property>
+    <name>fs.s3a.metadatastore.impl</name>
+    <value>org.apache.hadoop.fs.s3a.s3guard.NDBMetadataStore</value>
+  </property>
+
   <!-- Convenience definitions. -->
   <property>
     <name>s3guard.null</name>

@@ -1018,7 +1018,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
   /**
    * Validates a path meta-data object.
    */
-  private static void checkPathMetadata(PathMetadata meta) {
+  protected static void checkPathMetadata(PathMetadata meta) {
     Preconditions.checkNotNull(meta);
     Preconditions.checkNotNull(meta.getFileStatus());
     Preconditions.checkNotNull(meta.getFileStatus().getPath());

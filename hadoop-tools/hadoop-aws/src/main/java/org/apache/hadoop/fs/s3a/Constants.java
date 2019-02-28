@@ -435,6 +435,14 @@ public final class Constants {
       = "org.apache.hadoop.fs.s3a.s3guard.LocalMetadataStore";
 
   /**
+   * Use NDB for the metadata: {@value}.
+   * This is not coherent across processes and must be used for testing only.
+   */
+  @InterfaceStability.Unstable
+  public static final String S3GUARD_METASTORE_NDB
+          = "org.apache.hadoop.fs.s3a.s3guard.NDBMetadataStore";
+
+  /**
    * Use DynamoDB for the metadata: {@value}.
    */
   @InterfaceStability.Unstable

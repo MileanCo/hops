@@ -46,7 +46,7 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String DFS_STORAGE_DRIVER_CONFIG_FILE =
       "dfs.storage.driver.configfile";
   public static final String DFS_STORAGE_DRIVER_CONFIG_FILE_DEFAULT =
-      "ndb-config.properties";
+          "ndb-config.properties";
 
   public static final String DFS_NAMENODE_QUOTA_ENABLED_KEY =
       "dfs.namenode.quota.enabled";
