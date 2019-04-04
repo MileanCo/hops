@@ -31,6 +31,7 @@ import org.apache.hadoop.io.ReadaheadPool.ReadaheadRequest;
 import org.apache.hadoop.io.nativeio.NativeIO;
 import org.apache.hadoop.net.SocketOutputStream;
 import org.apache.hadoop.util.DataChecksum;
+import org.apache.htrace.core.TraceScope;
 
 import java.io.*;
 import java.net.SocketException;
@@ -38,7 +39,6 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
-import org.apache.htrace.core.TraceScope;
 
 /**
  * Reads a block from the disk and sends it to a recipient.
@@ -745,6 +745,7 @@ class BlockSender implements java.io.Closeable {
     }
   }
 
+  // TODO: implement S3 clients here
   private long doSendBlock(DataOutputStream out, OutputStream baseStream,
         DataTransferThrottler throttler) throws IOException {
     if (out == null) {

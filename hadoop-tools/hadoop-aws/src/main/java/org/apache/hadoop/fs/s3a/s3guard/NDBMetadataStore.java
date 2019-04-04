@@ -156,9 +156,8 @@ public class NDBMetadataStore implements MetadataStore {
     @Override
     public void deleteSubtree(Path path) throws IOException {
         path = checkPath(path);
-        String region = "N/A";
         String bucket = path.toUri().getHost();
-        LOG.debug("Deleting subtree from table {} in region {}: {}", bucket, region, path);
+        LOG.debug("Deleting subtree from bucket {}: {}", bucket, path);
 
         final PathMetadata meta = get(path);
         if (meta == null || meta.isDeleted()) {
