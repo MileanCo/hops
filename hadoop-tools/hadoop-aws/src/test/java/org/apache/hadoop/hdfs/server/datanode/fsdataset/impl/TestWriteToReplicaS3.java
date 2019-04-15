@@ -2,10 +2,7 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystemTestHelper;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.StorageType;
+import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.common.Storage;
@@ -44,13 +41,14 @@ public class TestWriteToReplicaS3 {
     private static final String[] BLOCK_POOL_IDS = {"bpid-" + rand.nextInt(1000), "bpid-" +  + rand.nextInt(1000)};
 
     private Configuration conf;
-    private final String TEST_BUCKET = "hopsfs-datanode-s3-test";
 
     private DataNode dn_real;
     private DataNode datanode_fake;
     private DataStorage storage;
     private S3DatasetImpl dataset_fake;
     private S3DatasetImpl s3dataset;
+
+    private MiniDFSCluster cluster;
 
     // Use to generate storageUuid
     private static final DataStorage dsForStorageUuid = new DataStorage(
@@ -61,30 +59,32 @@ public class TestWriteToReplicaS3 {
     public void setUp() throws IOException {
         datanode_fake = Mockito.mock(DataNode.class);
         storage = Mockito.mock(DataStorage.class);
-        this.conf = new Configuration();
+        this.conf = new HdfsConfiguration();
         final DNConf dnConf = new DNConf(conf);
+
+        // also setup real datanode
+
+        cluster = new MiniDFSCluster.Builder(conf).build();
+        cluster.waitActive();
+        dn_real = cluster.getDataNodes().get(0);
+        s3dataset = (S3DatasetImpl) DataNodeTestUtils.getFSDataset(dn_real);
+        s3dataset.addBlockPool(BLOCK_POOL_IDS[0], dn_real.getConf());
 
         when(datanode_fake.getConf()).thenReturn(conf);
         when(datanode_fake.getDnConf()).thenReturn(dnConf);
         when(datanode_fake.getFSDataset()).thenReturn((FsDatasetSpi) dataset_fake);
         createStorageDirs(storage, conf, NUM_INIT_VOLUMES);
-
-        conf.set("S3_BUCKET_URI", TEST_BUCKET);
-
+        
         dataset_fake = new S3DatasetImpl(datanode_fake, storage, conf);
         for (String bpid : BLOCK_POOL_IDS) {
             dataset_fake.addBlockPool(bpid, conf);
         }
+        
+        // TODO: how to fake NN?
+        when(dataset_fake.getNameNodeClient()).thenReturn(s3dataset.getNameNodeClient());
 
         assertEquals(NUM_INIT_VOLUMES, dataset_fake.getVolumes().size());
         assertEquals(0, dataset_fake.getNumFailedVolumes());
-
-        // also setup real datanode
-        MiniDFSCluster cluster = new MiniDFSCluster.Builder(new HdfsConfiguration()).build();
-        cluster.waitActive();
-        dn_real = cluster.getDataNodes().get(0);
-        s3dataset = (S3DatasetImpl) DataNodeTestUtils.getFSDataset(dn_real);
-        s3dataset.addBlockPool(BLOCK_POOL_IDS[0], dn_real.getConf());
     }
 
 
@@ -97,7 +97,7 @@ public class TestWriteToReplicaS3 {
      * @return Contrived blocks for further testing.
      * @throws IOException
      */
-    private ExtendedBlock[] setup(String bpid, S3DatasetImpl _dataset) throws IOException {
+    private ExtendedBlock[] setup_blocks(String bpid, S3DatasetImpl _dataset) throws IOException {
         s3dataset.addBlockPool(bpid, dn_real.getConf());
         // setup replicas map
 
@@ -171,7 +171,7 @@ public class TestWriteToReplicaS3 {
 
     @Test
     public void testFinalizeBlock() throws Exception {
-        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 2, 1, 2002);
+        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 20, 1, 2010);
         
         ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) s3dataset.createRbw(StorageType.DEFAULT, eb);
         rbwInfo.getBlockFile().createNewFile();
@@ -182,7 +182,7 @@ public class TestWriteToReplicaS3 {
 
         // get meta about this block
         // query S3 for the new block
-        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) s3dataset.getReplicaInfo(eb.getBlockPoolId(), eb.getBlockId());
+        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) s3dataset.getReplicaInfo(eb);
 
         // check data is correct
         assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
@@ -193,29 +193,28 @@ public class TestWriteToReplicaS3 {
 //            s3dataset.getBlockInputStream(finalizedBlock.get(), 1);
 
     }
-
-    // test writeToRbw
-    @Test
-    public void testFinalizeBlock_mock() throws Exception {
-        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 1, 1, 2001);
-        ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) dataset_fake.createRbw(StorageType.DEFAULT, eb);
-        rbwInfo.getBlockFile().createNewFile();
-        rbwInfo.getMetaFile().createNewFile();
-
-        // finalized & upload a block
-        dataset_fake.finalizeBlock(eb);
-
-        // get meta about this block
-        // query S3 for the new block
-        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) dataset_fake.getReplicaInfo(eb.getBlockPoolId(), eb.getBlockId());
-
-        // check data is correct
-        assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
-        assertEquals(eb.getGenerationStamp(), finalizedReplica.getGenerationStamp());
-        assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedReplica.getState());
-//            assertEquals(eb.getNumBytes(), finalizedReplica.getNumBytes());
-
-    }
+//    // mock doesnt work when a NN connection is needed for the DN
+//    @Test
+//    public void testFinalizeBlock_mock() throws Exception {
+//        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 1, 1, 2001);
+//        ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) dataset_fake.createRbw(StorageType.DEFAULT, eb);
+//        rbwInfo.getBlockFile().createNewFile();
+//        rbwInfo.getMetaFile().createNewFile();
+//
+//        // finalized & upload a block
+//        dataset_fake.finalizeBlock(eb);
+//
+//        // get meta about this block
+//        // query S3 for the new block
+//        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) dataset_fake.getReplicaInfo(eb.getBlockPoolId(), eb.getBlockId());
+//
+//        // check data is correct
+//        assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
+//        assertEquals(eb.getGenerationStamp(), finalizedReplica.getGenerationStamp());
+//        assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedReplica.getState());
+////            assertEquals(eb.getNumBytes(), finalizedReplica.getNumBytes());
+//
+//    }
 
     // Creates volume directories
     private static void createStorageDirs(DataStorage storage, Configuration conf,
@@ -245,27 +244,17 @@ public class TestWriteToReplicaS3 {
     // test append
     @Test
     public void testAppend() throws Exception {
-        MiniDFSCluster cluster =
-                new MiniDFSCluster.Builder(new HdfsConfiguration()).build();
-        try {
-            cluster.waitActive();
-            DataNode dn = cluster.getDataNodes().get(0);
-            FsDatasetImpl dataSet = (FsDatasetImpl) DataNodeTestUtils.getFSDataset(dn);
+        // set up replicasMap
+        String bpid = cluster.getNamesystem().getBlockPoolId();
+        ExtendedBlock[] blocks = setup_blocks(bpid, s3dataset);
 
-            // set up replicasMap
-            String bpid = cluster.getNamesystem().getBlockPoolId();
-            ExtendedBlock[] blocks = setup(bpid, s3dataset);
-
-            // test append
-            testAppend(bpid, s3dataset, blocks);
-        } finally {
-            cluster.shutdown();
-        }
+        // test append
+        testAppend(bpid, s3dataset, blocks);
     }
 
     private void testAppend(String bpid, S3DatasetImpl _dataset, ExtendedBlock[] blocks) throws IOException {
         long newGS = blocks[FINALIZED].getGenerationStamp() + 1;
-        final FsVolumeImpl v = (FsVolumeImpl) _dataset.getS3FinalizedReplica(bpid, blocks[FINALIZED].getLocalBlock()).getVolume();
+        final FsVolumeImpl v = (FsVolumeImpl) _dataset.getS3FinalizedReplica(blocks[FINALIZED]).getVolume();
         long available = v.getCapacity() - v.getDfsUsed();
         long expectedLen = blocks[FINALIZED].getNumBytes();
         try {
@@ -279,6 +268,7 @@ public class TestWriteToReplicaS3 {
                     e.getMessage().startsWith("Insufficient space for appending to "));
         }
         v.decDfsUsed(bpid, available);
+        blocks[FINALIZED].setNumBytes(expectedLen);
         blocks[FINALIZED].setNumBytes(expectedLen);
 
         newGS = blocks[RBW].getGenerationStamp() + 1;
@@ -387,6 +377,28 @@ public class TestWriteToReplicaS3 {
         } catch (ReplicaNotFoundException e) {
             Assert.assertTrue(e.getMessage()
                     .startsWith(ReplicaNotFoundException.NON_EXISTENT_REPLICA));
+        }
+    }
+
+    @Test
+    public void testGetS3BlockWrongGS() throws Exception {
+        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 2, 1, 2002);
+
+        ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) s3dataset.createRbw(StorageType.DEFAULT, eb);
+        rbwInfo.getBlockFile().createNewFile();
+        rbwInfo.getMetaFile().createNewFile();
+
+        // finalized & upload a block
+        s3dataset.finalizeBlock(eb);
+
+        // get meta about this block
+        // query S3 for the new block
+        eb.setGenerationStamp(9000);
+        try {
+            S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) s3dataset.getReplicaInfo(eb);
+            Assert.fail("Should not have gotten block" + finalizedReplica);
+        } catch (ReplicaNotFoundException err) {
+            Assert.assertTrue(err.getMessage().startsWith(ReplicaNotFoundException.NON_EXISTENT_REPLICA));
         }
     }
 }

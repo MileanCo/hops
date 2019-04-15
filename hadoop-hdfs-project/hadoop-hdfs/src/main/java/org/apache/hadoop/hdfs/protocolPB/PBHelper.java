@@ -2525,6 +2525,8 @@ public class PBHelper {
             proto.getTableVersion()
     );
   }
-
-
+  
+  public static Block convert(DatanodeProtocolProtos.GetCompletedBlockMetaResponseProto proto) {
+    return convert(proto.getBlock());
+  }
 }

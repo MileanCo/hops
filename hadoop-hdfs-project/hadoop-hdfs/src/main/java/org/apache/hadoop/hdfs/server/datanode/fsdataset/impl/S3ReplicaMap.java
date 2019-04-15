@@ -27,37 +27,20 @@ public class S3ReplicaMap extends ReplicaMap {
     @Override
     ReplicaInfo get(String bpid, Block block) {
         // first get from volume map like normally
-        ReplicaInfo replicaInfo = super.get(bpid, block);
+        ReplicaInfo replicaInfo = super.get(bpid, block.getBlockId());
         // check S3 if replicainfo is null
         if (replicaInfo == null) {
-            replicaInfo = s3Dataset.getS3FinalizedReplica(bpid, block.getBlockId());
+            // Get block from S3 consistently
+            replicaInfo = s3Dataset.getS3FinalizedReplica(block.getGenerationStamp(), bpid, block.getBlockId());
         }
         // check gen stamp and return
         if (replicaInfo != null && block.getGenerationStamp() == replicaInfo.getGenerationStamp()) {
             return replicaInfo;
         }
-        return null;
-        
-    }
-    
-    /**
-     * Get the meta information of the replica that matches the block id.
-     * If replicaMap does not contain the block, we check S3.
-     *
-     * @param bpid
-     *     block pool id
-     * @param blockId
-     *     a block's id
-     * @return the replica's meta information
-     */
-    @Override
-    ReplicaInfo get(String bpid, long blockId) {
-        // first get from volume map like normally
-        ReplicaInfo replicaInfo = super.get(bpid, blockId);
-        // check S3 if replicainfo is null
-        if (replicaInfo == null) {
-            replicaInfo = s3Dataset.getS3FinalizedReplica(bpid, blockId);
-        }
         return replicaInfo;
     }
+    
+
+    // Dont override this function, since RBW blocks are local.
+    //    ReplicaInfo get(String bpid, long blockId) {
 }

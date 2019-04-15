@@ -29,11 +29,7 @@ import java.io.IOException;
  */
 public class S3DatasetFactory extends FsDatasetSpi.Factory<S3DatasetImpl> {
   @Override
-  public S3DatasetImpl newInstance(DataNode datanode, DataStorage storage,
-      Configuration conf) throws IOException {
-    
-    // TODO: move to central place
-    conf.set("S3_BUCKET_URI", "hopsfs-datanode-s3-test");
+  public S3DatasetImpl newInstance(DataNode datanode, DataStorage storage, Configuration conf) throws IOException {
     return new S3DatasetImpl(datanode, storage, conf);
   }
 }

@@ -505,7 +505,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
    *     if no entry is in the map or
    *     there is a generation stamp mismatch
    */
-  ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException {
+  @Override
+  public ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException {
     ReplicaInfo info = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
     if (info == null) {
       throw new ReplicaNotFoundException(
@@ -824,8 +825,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
   protected ReplicaInfo recoverCheck(ExtendedBlock b, long newGS,
       long expectedBlockLen) throws IOException {
-    ReplicaInfo replicaInfo =
-        getReplicaInfo(b.getBlockPoolId(), b.getBlockId());
+    
+    // TODO: Changed for S3 to check GS (otherwise it breaks eventual consistency)
+    //  for local storage, this might need to not check GS? For now, we assume getting block with correct GS is fine
+    ReplicaInfo replicaInfo = getReplicaInfo(b);
     
     // check state
     if (replicaInfo.getState() != ReplicaState.FINALIZED &&
@@ -837,8 +840,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     // check generation stamp
     long replicaGenerationStamp = replicaInfo.getGenerationStamp();
-    if (replicaGenerationStamp < b.getGenerationStamp() ||
-        replicaGenerationStamp > newGS) {
+    
+    if (replicaGenerationStamp < b.getGenerationStamp() || replicaGenerationStamp > newGS) {
+      
+      
       throw new ReplicaNotFoundException(
           ReplicaNotFoundException.UNEXPECTED_GS_REPLICA +
               replicaGenerationStamp + ". Expected GS range is [" +
@@ -940,8 +945,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public synchronized ReplicaInPipeline createRbw(StorageType storageType,
       ExtendedBlock b) throws IOException {
-    ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(),
-        b.getBlockId());
+    ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getBlockId());
+    
     if (replicaInfo != null) {
       throw new ReplicaAlreadyExistsException("Block " + b +
           " already exists in state " + replicaInfo.getState() +
@@ -1874,9 +1879,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   public synchronized ReplicaRecoveryInfo initReplicaRecovery(
       RecoveringBlock rBlock) throws IOException {
     return initReplicaRecovery(rBlock.getBlock().getBlockPoolId(), volumeMap,
-        rBlock.getBlock().getLocalBlock(), rBlock.getNewGenerationStamp(), datanode.getDnConf().getXceiverStopTimeout());
+            rBlock.getBlock().getLocalBlock(), rBlock.getNewGenerationStamp(), datanode.getDnConf().getXceiverStopTimeout());
   }
-
+  
   /**
    * static version of {@link #initReplicaRecovery(RecoveringBlock)}.
    */
@@ -2035,6 +2040,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     }
     return replica.getVisibleLength();
   }
+  
+  
   
   @Override
   public void addBlockPool(String bpid, Configuration conf)

@@ -1,14 +1,19 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.S3AFileSystemCommon;
+import org.apache.hadoop.fs.s3a.UploadInfo;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.DFSUtil;
+import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.protocolPB.DatanodeProtocolClientSideTranslatorPB;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.datanode.*;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
@@ -16,9 +21,15 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 import org.apache.hadoop.hdfs.server.protocol.BlockRecoveryCommand;
 import org.apache.hadoop.hdfs.server.protocol.ReplicaRecoveryInfo;
 import org.apache.hadoop.util.DiskChecker;
+import org.apache.hadoop.util.ReflectionUtils;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,11 +37,10 @@ import java.util.Map;
 import static org.apache.hadoop.hdfs.protocol.Block.BLOCK_FILE_PREFIX;
 import static org.apache.hadoop.hdfs.protocol.Block.METADATA_EXTENSION;
 
-//class S3DatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
-
 public class S3DatasetImpl extends FsDatasetImpl {
-    AmazonS3 s3Client;
-    String bucket;
+    private String bucket;
+    private S3AFileSystemCommon s3afs;
+    private DatanodeProtocolClientSideTranslatorPB namenode;
     
     // Map of block pool Id to another map of block Id to S3FinalizedReplica
     private Map<String, Map<Long, S3FinalizedReplica>> downloadedBlocksMap = new HashMap<>();
@@ -41,68 +51,76 @@ public class S3DatasetImpl extends FsDatasetImpl {
      * @param datanode
      * @param storage
      * @param conf
-     */
+     */ 
+    
     S3DatasetImpl(DataNode datanode, DataStorage storage, Configuration conf) throws IOException {
         super(datanode, storage, conf);
         // create new voluemMap that checks S3 if block is not found locally
         super.volumeMap = new S3ReplicaMap(this, this);
-        bucket = conf.get("S3_BUCKET_URI");
+        bucket = conf.get(DFSConfigKeys.S3_DATASET_BUCKET, "");
         
-        String region = conf.get("fs.s3a.endpoint");
-        s3Client = AmazonS3ClientBuilder.standard()
-                .withRegion(region)
-                .withCredentials(new ProfileCredentialsProvider())
-                .build();
+        Class<? extends S3AFileSystemCommon> s3AFilesystemClass = conf.getClass(
+                DFSConfigKeys.S3A_IMPL, S3AFileSystemCommon.class,
+                S3AFileSystemCommon.class);
+        
+        s3afs = ReflectionUtils.newInstance(s3AFilesystemClass, conf);
+        URI rootURI = URI.create("s3a://" + bucket);
+        
+        s3afs.initialize(rootURI, conf);
+        s3afs.setWorkingDirectory(new Path("/"));
+        
+        // also connect to NN
+        List<InetSocketAddress> addrs = DFSUtil.getNameNodesServiceRpcAddresses(conf);
+        namenode = datanode.connectToNN(addrs.get(0));
+        // TODO: use below instead whenver a block is queried?
+        //namenode = datanode.getActiveNamenodeForBP();
+    }
+
+    @Override // FsDatasetSpi
+    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
+                                                    ExtendedBlock b) throws IOException {
+        // checks local filesystem and S3 for the block
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
+        if (replicaInfo != null) {
+            throw new ReplicaAlreadyExistsException("Block " + b +
+                    " already exists in state " + replicaInfo.getState() +
+                    " and thus cannot be created.");
+        }
+        // create a new block
+        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
+
+        // create an rbw file to hold block in the designated volume
+        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
+                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
+        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
+
+        return newReplicaInfo;
     }
     
     public void downloadS3BlockTo(String bpid, long blockId, File dest) throws IOException {
         // TODO: check cache if block exists locally?
-        LengthInputStream blockInputStream = getS3BlockInputStream(bpid, blockId, 0);
+        S3ConsistentRead s3read = new S3ConsistentRead(this);
+        InputStream blockInputStream = s3read.getS3BlockInputStream(bpid, blockId, 0);
         FileUtils.copyInputStreamToFile(blockInputStream, dest);
     }
 
     public void downloadS3BlockMetaTo(String bpid, long blockId, File dest) throws IOException {
         // TODO: check cache if block exists locally?
-        LengthInputStream blockMetaInputStream = getS3BlockMetaInputStream(bpid, blockId);
+        S3ConsistentRead s3read = new S3ConsistentRead(this);
+        InputStream blockMetaInputStream = s3read.getS3BlockMetaInputStream(bpid, blockId);
         FileUtils.copyInputStreamToFile(blockMetaInputStream, dest);
-    }
-    
-    public LengthInputStream getS3BlockInputStream(String bpid, long blockId, long seekOffset) {
-        String block_aws_key = getBlockKey(bpid, blockId);
-        LOG.info("Getting block file " + block_aws_key);
-        
-        try {
-            GetObjectRequest getRequest = new GetObjectRequest(bucket, block_aws_key);
-            getRequest.setRange(seekOffset);
-            S3Object fullObject = s3Client.getObject(getRequest);
-            return new LengthInputStream(fullObject.getObjectContent(), fullObject.getObjectMetadata().getInstanceLength());
-        } catch (AmazonS3Exception err) {
-            LOG.error(err);
-//            datanode.query_nn(blkid);
-            return null;
-        }
-    }
-
-    public LengthInputStream getS3BlockMetaInputStream(String bpid, long blockId) {
-        String block_meta_aws_key = getBlockMetaKey(bpid, blockId);
-        LOG.info("Getting block meta file " + block_meta_aws_key);
-        try {
-            S3Object fullObject = s3Client.getObject(new GetObjectRequest(bucket, block_meta_aws_key));
-            return new LengthInputStream(fullObject.getObjectContent(), fullObject.getObjectMetadata().getInstanceLength());
-        } catch (AmazonS3Exception err) {
-            LOG.error(err);
-//            datanode.query_nn(blkid);
-            return null;
-        }
     }
     
     @Override // FsDatasetSpi
     public InputStream getBlockInputStream(ExtendedBlock b, long seekOffset) throws IOException {
         // TODO: can probably prevent an S3 query here by changing input params or checking them
-        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
         
         if (replicaInfo == null || replicaInfo.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
-            return getS3BlockInputStream(b.getBlockPoolId(), b.getLocalBlock().getBlockId(), seekOffset);
+            S3ConsistentRead read = new S3ConsistentRead(this);
+            // TODO: check GS before reading
+            return read.getS3BlockInputStream(b.getBlockPoolId(), b.getLocalBlock().getBlockId(), seekOffset);
         } else {
             return super.getBlockInputStream(b, seekOffset);
         }
@@ -111,10 +129,11 @@ public class S3DatasetImpl extends FsDatasetImpl {
     @Override // FsDatasetSpi
     public LengthInputStream getMetaDataInputStream(ExtendedBlock b) throws IOException {
         // TODO: can probably prevent an S3 query here by changing input params or checking them
-        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getBlockId());
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
 
         if (replicaInfo == null || replicaInfo.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
-            return getS3BlockMetaInputStream(b.getBlockPoolId(), b.getBlockId());
+            S3ConsistentRead read = new S3ConsistentRead(this);
+            return new LengthInputStream(read.getS3BlockMetaInputStream(b.getBlockPoolId(), b.getBlockId()), b.getNumBytes());
         } else {
             return super.getMetaDataInputStream(b);
         }
@@ -128,38 +147,12 @@ public class S3DatasetImpl extends FsDatasetImpl {
         return getBlockKey(blockPoolId, blockId) + METADATA_EXTENSION;
     }
     
-
-    /**
-     * Get the meta info of a block stored in volumeMap. To find a block,
-     * block pool Id, block Id and generation stamp must match.
-     *
-     * @param b
-     *     extended block
-     * @return the meta replica information; null if block was not found
-     * @throws ReplicaNotFoundException
-     *     if no entry is in the map or
-     *     there is a generation stamp mismatch
-     */
-    @Override
-    ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException {
-        // volume map only contains non-s3 replicas
-        ReplicaInfo info = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
-        if (info == null) {
-            info = getS3FinalizedReplica(b.getBlockPoolId(), b.getLocalBlock());
-            if (info == null) {
-                throw new ReplicaNotFoundException(ReplicaNotFoundException.NON_EXISTENT_REPLICA + b);
-            }
-        }
-        return info;
-    }
-    
-    
-
     
     @Override // FsDatasetSpi
     public synchronized ReplicaRecoveryInfo initReplicaRecovery(BlockRecoveryCommand.RecoveringBlock rBlock) throws IOException {
         String bpid = rBlock.getBlock().getBlockPoolId();
-        final ReplicaInfo replica = volumeMap.get(bpid, rBlock.getBlock().getBlockId());
+        // get the correct replica from S3 that matches given GS
+        final ReplicaInfo replica = volumeMap.get(bpid, rBlock.getBlock().getLocalBlock());
         
         if (replica != null && replica.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
             // set the finalized dir on the replica
@@ -177,12 +170,37 @@ public class S3DatasetImpl extends FsDatasetImpl {
             downloadS3BlockMetaTo(bpid, replica.getBlockId(), replica.getMetaFile());
 
             // add downloaded block to volumemap so we can find this exact replica class again
-            // TODO: delete local block after recovery is complete??
             volumeMap.add(bpid, replica);
         }
 
         return initReplicaRecovery(bpid, volumeMap,
                 rBlock.getBlock().getLocalBlock(), rBlock.getNewGenerationStamp(), datanode.getDnConf().getXceiverStopTimeout());
+    }
+
+
+    /**
+     * Get the meta info of a block stored in volumeMap. To find a block,
+     * block pool Id, block Id and generation stamp must match.
+     *
+     * @param b
+     *     extended block
+     * @return the meta replica information; null if block was not found
+     * @throws ReplicaNotFoundException
+     *     if no entry is in the map or
+     *     there is a generation stamp mismatch
+     */
+    @Override
+    public ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException {
+        // volume map only contains non-s3 replicas
+        ReplicaInfo info = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
+        if (info == null) {
+            // Get block from S3 and checks GS
+            info = getS3FinalizedReplica(b);
+            if (info == null) {
+                throw new ReplicaNotFoundException(ReplicaNotFoundException.NON_EXISTENT_REPLICA + b);
+            }
+        }
+        return info;
     }
 
     /**
@@ -198,59 +216,56 @@ public class S3DatasetImpl extends FsDatasetImpl {
      *     if no entry is in the map or
      *     there is a generation stamp mismatch
      */
+    // shouldnt have gen stamp check when a block is already downloaded... but before it DL it should check
     @Override
     protected ReplicaInfo getReplicaInfo(String bpid, long blkid) throws ReplicaNotFoundException {
         // volume map only contains non-s3 replicas
         ReplicaInfo info = volumeMap.get(bpid, blkid);
         if (info == null) {
-            info = getS3FinalizedReplica(bpid, blkid);
-            if (info == null) {
-                throw new ReplicaNotFoundException(ReplicaNotFoundException.NON_EXISTENT_REPLICA + bpid + ":" + blkid);
-            }
+            throw new ReplicaNotFoundException("Replica not found on local file system. Use getReplicaInfo(block) to get from S3 (generation stamp needed). Block" + bpid + ":" + blkid);
         }
         return info;
     }
 
+    @Override // FsDatasetSpi
+    public synchronized long getReplicaVisibleLength(final ExtendedBlock block) throws IOException {
+        final Replica replica = getReplicaInfo(block);
+        if (replica.getGenerationStamp() < block.getGenerationStamp()) {
+            throw new IOException(
+                    "replica.getGenerationStamp() < block.getGenerationStamp(), block=" +
+                            block + ", replica=" + replica);
+        }
+        return replica.getVisibleLength();
+    }
+
     // Returns S3FinalizedReplica and also checks generation stamps matches
-    public S3FinalizedReplica getS3FinalizedReplica(String bpid, Block block) {
-        S3FinalizedReplica s3replica = getS3FinalizedReplica(bpid, block.getBlockId());
-        if (s3replica != null && block.getGenerationStamp() == s3replica.getGenerationStamp()) {
-            return s3replica;
+    public S3FinalizedReplica getS3FinalizedReplica(ExtendedBlock block) {
+        S3FinalizedReplica s3replica = getS3FinalizedReplica(block.getGenerationStamp(), block.getBlockPoolId(), block.getBlockId());
+        return s3replica;
+    }
+
+    // Query the namenode for a completed block instead of S3 for consistency --> doesnt work b/c NN has old GS for recovery
+    public S3FinalizedReplica getS3FinalizedReplica(long genStamp, String bpid, long blockId) {
+        S3ConsistentRead consistentRead = new S3ConsistentRead(this);
+        Block block = consistentRead.getS3Block(genStamp, bpid, blockId);
+        if (block != null ) {
+            return new S3FinalizedReplica(block, bpid, volumes.getVolumes().get(0), bucket);
         }
         return null;
     }
 
-
-    public S3FinalizedReplica getS3FinalizedReplica(String bpid, long blockId) {
-        Block block = getStoredBlock(bpid, blockId);
-        if (block != null) {
-            return new S3FinalizedReplica(block, bpid, volumes.getVolumes().get(0), bucket);    
-        }
-        return null;
-    }
 
     // This is NOT a read - it doesnt read the block - only gets block information
-    @Override // FsDatasetSpi
-    public Block getStoredBlock(String bpid, long blkId) {
-//        File blockfile = getFile(bpid, blkid);
-//        if (blockfile == null) {
-//            return null;
-//        }
-        String block_aws_key = getBlockKey(bpid, blkId);
-        S3Object blockObj;
-        try {
-            blockObj = s3Client.getObject(new GetObjectRequest(bucket, block_aws_key));
-        } catch (AmazonS3Exception err) {
-            LOG.error(err);
-//            datanode.query_nn(blkid);
-            return null;
-        }
-//        final File metafile = FsDatasetUtil.findMetaFile(blockfile);
-//        final long gs = FsDatasetUtil.parseGenerationStamp(blockfile, metafile);
-        long gs = Long.parseLong(blockObj.getObjectMetadata().getUserMetadata().get("generationstamp"));
-
-        return new Block(blkId, blockObj.getObjectMetadata().getInstanceLength(), gs);
-    }
+    // doesnt check GS
+//    @Override // FsDatasetSpi
+//    public Block getStoredBlock(String bpid, long blkId) {
+//        // Look at the volume map for the block; if not found it will query namenode
+////        return volumeMap.get(bpid, blkId);
+//        // just get the meta
+//        getReplicaInfo(bpid, blkId);
+////        S3ConsistentRead consistentRead = new S3ConsistentRead(this);
+////        return consistentRead.getS3Block(bpid, blkId);
+//    }
     
     /**
      * Complete the block write!
@@ -258,20 +273,9 @@ public class S3DatasetImpl extends FsDatasetImpl {
     // TODO: is synchronized still needed for s3?
     @Override
     protected synchronized S3FinalizedReplica finalizeReplica(String bpid, ReplicaInfo replicaInfo) throws IOException {
-//        FinalizedReplica newReplicaInfo;
-//            FsVolumeImpl v = (FsVolumeImpl) replicaInfo.getVolume();
-//            File f = replicaInfo.getBlockFile();
-//            if (v == null) {
-//                throw new IOException("No volume for temporary file " + f +
-//                        " for block " + replicaInfo);
-//            }
-//    
-//            File dest = v.addFinalizedBlock(bpid, replicaInfo, f, replicaInfo.getBytesReserved());
-//            
         File local_block_file = replicaInfo.getBlockFile();
         File local_meta_file = replicaInfo.getMetaFile(); //FsDatasetUtil.getMetaFile(local_block_file, replicaInfo.getGenerationStamp());
-
-
+        
         // Upload a text string as a new object.
         String s3_block_key = getBlockKey(bpid, replicaInfo.getBlockId());
         String s3_block_meta_key = getBlockMetaKey(bpid, replicaInfo.getBlockId());
@@ -280,19 +284,26 @@ public class S3DatasetImpl extends FsDatasetImpl {
         // Upload a file as a new object with ContentType and title specified.
         PutObjectRequest putReqBlock = new PutObjectRequest(bucket, s3_block_key, local_block_file);
         ObjectMetadata blockMetadata = new ObjectMetadata();
-//            metadata.setContentType("plain/text");
         blockMetadata.addUserMetadata("generationstamp", String.valueOf(replicaInfo.getGenerationStamp()));
         putReqBlock.setMetadata(blockMetadata);
-        LOG.info("Putting block file " + s3_block_key);
-        s3Client.putObject(putReqBlock);
+        LOG.info("Uploading block file " + s3_block_key);
+        UploadInfo uploadBlock = s3afs.putObject(putReqBlock);
         
-        LOG.info("Putting block meta file " + s3_block_key);
+        LOG.info("Uploading block meta file " + s3_block_key);
         PutObjectRequest putReqMeta = new PutObjectRequest(bucket, s3_block_meta_key, local_meta_file);
-        s3Client.putObject(putReqMeta);
-        
+        UploadInfo uploadBlockMeta = s3afs.putObject(putReqMeta);
 
-        // TODO localBlockFile.getTotalSpace() ?
-        //  GS++ ?
+
+        // TODO: can this be async??
+        // TODO: use S3AFastUpload - https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html#Stabilizing:_S3A_Fast_Upload
+        try {
+            uploadBlock.getUpload().waitForUploadResult();
+            uploadBlockMeta.getUpload().waitForUploadResult();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            LOG.error(e);
+        }
+        
         S3FinalizedReplica newReplicaInfo = new S3FinalizedReplica(
                 replicaInfo.getBlockId(), 
                 bpid,
@@ -400,18 +411,15 @@ public class S3DatasetImpl extends FsDatasetImpl {
     @Override
     @Deprecated
     public ReplicaInfo getReplica(String bpid, long blockId) {
-        ReplicaInfo rep = volumeMap.get(bpid, blockId);
-        if (rep == null) {
-            return getS3FinalizedReplica(bpid, blockId);
-        }
-        return rep;
+        throw new NotImplementedException();
     }
 
     @Override
     ReplicaInfo fetchReplicaInfo(String bpid, long blockId) {
         ReplicaInfo r = volumeMap.get(bpid, blockId);
         if (r == null) {
-            return getS3FinalizedReplica(bpid, blockId);
+            throw new CustomRuntimeException("To get an S3 Finalized Replica you need to provide the generation stamp.");
+//            return getS3FinalizedReplica(bpid, blockId);
         }
         switch (r.getState()) {
             case FINALIZED:
@@ -433,7 +441,14 @@ public class S3DatasetImpl extends FsDatasetImpl {
     @Override // FsDatasetSpi
     public synchronized boolean contains(final ExtendedBlock block) {
         final long blockId = block.getLocalBlock().getBlockId();
-        return s3Client.doesObjectExist(bucket, getBlockKey(block.getBlockPoolId(), blockId));
+        try {
+            // S3guard marks deleted files, so this would return properly
+            // TODO: might need to check GS still
+            return s3afs.exists(new Path(getBlockKey(block.getBlockPoolId(), blockId)));    
+        } catch (IOException err) {
+            LOG.error(err);
+            return false;
+        }
     }
 
     @Override // FsDatasetSpi
@@ -450,8 +465,9 @@ public class S3DatasetImpl extends FsDatasetImpl {
      */
     @Override
     public synchronized List<FinalizedReplica> getFinalizedBlocks(String bpid) {
-        // this is fory block pool & directory scanners
-        throw new NotImplementedException();    
+        // TODO: this is for block pool & directory scanners
+        //  return empty list for now since s3 is already safe
+        return new ArrayList<FinalizedReplica>();
     }
     
     @Override // FsDatasetSpi
@@ -463,44 +479,21 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public void uncache(String bpid, long[] blockIds) {
         // TODO: preemptively download S3 block and store it in a map?
     }
-    /**
-     * Turn the block identifier into a filename
-     *
-     * @param bpid
-     *     Block pool Id
-     * @param blockId
-     *     a block's id
-     * @return on disk data file path; null if the replica does not exist
-     */
-    @Override
-    File getFile(final String bpid, final long blockId) {
-        throw new NotImplementedException();
-//        throw new Exception("S3 doesnt use local file paths");
-//        ReplicaInfo info = volumeMap.get(bpid, blockId);
-//        S3FinalizedReplica s3blockInfo = downloadedBlocksMap.get(bpid).get(blockId);
-//        if (s3blockInfo != null) {
-////            return info.getBlockFile();
-//            return s3blockInfo.get
-//        }
-//        return null;
-    }
+    
+
+    // we keep these original methods for non-s3 blocks like RBW
+//    File getFile(final String bpid, final long blockId) {
+//    }
+//    File getBlockFile(String bpid, Block b) throws IOException {
+//        throw new NotImplementedException();
+//    }
+    
     /**
      * Find the block's on-disk length
      */
     @Override // FsDatasetSpi
     public long getLength(ExtendedBlock b) throws IOException {
-        // query S3 and return that? Not used for S3 really.
-        // TODO: performance improv
-        return getStoredBlock(b.getBlockPoolId(), b.getBlockId()).getNumBytes();
-//        return getBlockFile(b).length();
-    }
-
-    /**
-     * Get File name for a given block.
-     */
-    @Override
-    File getBlockFile(String bpid, Block b) throws IOException {
-        throw new NotImplementedException();
+        return getReplicaInfo(b).getNumBytes();
     }
     
     @Override // FsDatasetSpi
@@ -514,5 +507,16 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public void checkAndUpdate(String bpid, long blockId, File diskFile, File diskMetaFile, FsVolumeSpi vol) {
         throw new NotImplementedException();
     }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public DatanodeProtocolClientSideTranslatorPB getNameNodeClient() {
+        return namenode;
+    }
     
+    public S3AFileSystemCommon getS3AFileSystem() {
+        return s3afs;
+    }
 }

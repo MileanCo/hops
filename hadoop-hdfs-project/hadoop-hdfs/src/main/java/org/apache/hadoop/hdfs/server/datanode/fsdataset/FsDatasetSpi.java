@@ -57,7 +57,7 @@ public interface FsDatasetSpi<V extends FsVolumeSpi> extends FSDatasetMBean {
      */
     public static Factory<?> getFactory(Configuration conf) {
       @SuppressWarnings("rawtypes")
-      boolean s3_enabled = true;
+      boolean s3_enabled = conf.getBoolean(DFSConfigKeys.S3_DATASET, DFSConfigKeys.S3_DATASET_DEFAULT);
       if (s3_enabled) {
         final Class<? extends Factory> clazz = conf.getClass(DFSConfigKeys.DFS_DATANODE_FSDATASET_FACTORY_KEY, S3DatasetFactory.class, Factory.class);
         return ReflectionUtils.newInstance(clazz, conf);
@@ -164,6 +164,19 @@ public interface FsDatasetSpi<V extends FsVolumeSpi> extends FSDatasetMBean {
    */
   @Deprecated
   public Replica getReplica(String bpid, long blockId);
+
+  /**
+   * Get the meta info of stored block. To find a block,
+   * block pool Id, block Id and generation stamp must match.
+   *
+   * @param b
+   *     extended block
+   * @return the meta replica information; null if block was not found
+   * @throws ReplicaNotFoundException
+   *     if no entry is in the map or
+   *     there is a generation stamp mismatch
+   */
+  public ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException ;
 
   /**
    * @return replica meta information

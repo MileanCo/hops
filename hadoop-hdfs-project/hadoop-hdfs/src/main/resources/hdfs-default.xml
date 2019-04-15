@@ -1910,4 +1910,23 @@
   </description>
 </property>
 
+<property>
+  <name>dfs.datanode.use_s3</name>
+  <value>true</value>
+  <description>Use S3 on the datanode as the default file system.
+  </description>
+</property>
+<property>
+  <name>dfs.datanode.s3_bucket</name>
+  <value>hopsfs-datanode-s3-test2</value>
+  <description>The bucket to use as backend store for the Datanode.
+  </description>
+</property>
+<property>
+  <name>fs.s3a.impl</name>
+  <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+  <description>The S3A Filesystem implementation to use during runtime.
+  </description>
+</property>
+  
 </configuration>

@@ -3644,7 +3644,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
       @Override
       public void setUp() throws StorageException {
-        inodeIdentifier =
+        inodeIdentifier = 
             INodeUtil.resolveINodeFromBlock(lastBlock.getLocalBlock());
       }
 
@@ -8646,8 +8646,61 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
             }
         }.handle();
     }
+  /** END S3Guard Methods */
 
-    /** END S3Guard Methods */
+  
+
+  public BlockInfo getCompletedBlockMeta(final long blockId) throws IOException {
+    final Block block = new Block(blockId);
+    return (BlockInfo) new HopsTransactionalRequestHandler(HDFSOperationType.GET_BLOCK) {
+      INodeIdentifier inodeIdentifier;
+
+      @Override
+      public void setUp() throws StorageException {
+        // inside DB transaction, but no locks yet
+        inodeIdentifier = INodeUtil.resolveINodeFromBlock(block);
+      }
+
+      @Override
+      public void acquireLock(TransactionLocks locks) throws IOException {
+        // puts stuff into memory from DB & takes lock on DB so other transactions dont modify
+        LockFactory lf = getInstance();
+        
+        locks.add(lf.getIndividualINodeLock(INodeLockType.READ, inodeIdentifier, false))
+                .add(lf.getBlockLock(blockId, inodeIdentifier))
+                .add(lf.getBlockRelated(BLK.RE, BLK.CR, BLK.ER, BLK.UC, BLK.UR));
+      }
+
+      @Override
+      public Object performTask() throws IOException {
+        // works in memory
+        BlockInfo blockInfo = getStoredBlock(block);
+        if (blockInfo != null && blockInfo.isComplete()) {
+          return blockInfo;
+        }
+        return null;
+      }
+    }.handle();
     
+  }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

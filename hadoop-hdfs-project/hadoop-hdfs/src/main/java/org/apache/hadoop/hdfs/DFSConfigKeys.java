@@ -1072,4 +1072,13 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String NNTOP_WINDOWS_MINUTES_KEY =
       "dfs.namenode.top.windows.minutes";
   public static final String[] NNTOP_WINDOWS_MINUTES_DEFAULT = {"1","5","25"};
+  
+  public static final String S3_DATASET = "dfs.datanode.use_s3";
+  public static final boolean S3_DATASET_DEFAULT = false;
+  public static final String S3_DATASET_BUCKET = "dfs.datanode.s3_bucket";
+  public static final String S3_DATASET_BUCKET_DEFAULT = "hopsfs-datanode-s3-test";
+
+  public static final String S3A_IMPL = "fs.s3a.impl";
+  public static final String S3A_IMPL_DEFAULT = "org.apache.hadoop.fs.s3a.S3AFileSystem";
+  
 }
