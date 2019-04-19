@@ -1,8 +1,12 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystemTestHelper;
-import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.common.Storage;
@@ -19,6 +23,7 @@ import org.mockito.Mockito;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -188,33 +193,8 @@ public class TestWriteToReplicaS3 {
         assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
         assertEquals(eb.getGenerationStamp(), finalizedReplica.getGenerationStamp());
         assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedReplica.getState());
-//            assertEquals(eb.getNumBytes(), finalizedBlock.getNumBytes());
-
-//            s3dataset.getBlockInputStream(finalizedBlock.get(), 1);
-
     }
-//    // mock doesnt work when a NN connection is needed for the DN
-//    @Test
-//    public void testFinalizeBlock_mock() throws Exception {
-//        ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 1, 1, 2001);
-//        ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) dataset_fake.createRbw(StorageType.DEFAULT, eb);
-//        rbwInfo.getBlockFile().createNewFile();
-//        rbwInfo.getMetaFile().createNewFile();
-//
-//        // finalized & upload a block
-//        dataset_fake.finalizeBlock(eb);
-//
-//        // get meta about this block
-//        // query S3 for the new block
-//        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) dataset_fake.getReplicaInfo(eb.getBlockPoolId(), eb.getBlockId());
-//
-//        // check data is correct
-//        assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
-//        assertEquals(eb.getGenerationStamp(), finalizedReplica.getGenerationStamp());
-//        assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedReplica.getState());
-////            assertEquals(eb.getNumBytes(), finalizedReplica.getNumBytes());
-//
-//    }
+
 
     // Creates volume directories
     private static void createStorageDirs(DataStorage storage, Configuration conf,
@@ -241,26 +221,86 @@ public class TestWriteToReplicaS3 {
         return sd;
     }
 
-    // test append
+
     @Test
     public void testAppend() throws Exception {
+        String test_str = "this is bananas!";
+        // set up replicasMap
+        String bpid = cluster.getNamesystem().getBlockPoolId();
+        ExtendedBlock eb = new ExtendedBlock(bpid, 21, test_str.getBytes().length, 2020);
+        
+        ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) s3dataset.createRbw(StorageType.DEFAULT, eb);
+        rbwInfo.getBlockFile().createNewFile();
+        rbwInfo.getMetaFile().createNewFile();
+        
+        // write some real data
+        File blockFile = rbwInfo.getBlockFile();
+        FileUtils.writeStringToFile(blockFile, test_str);
+        
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] hash = md.digest(test_str.getBytes());
+        File metaFile = rbwInfo.getMetaFile();
+        FileUtils.writeByteArrayToFile(metaFile, hash);
+        
+
+        // finalized & upload a block
+        s3dataset.finalizeBlock(eb);
+        
+        // check data is correct
+        S3FinalizedReplica finalizedReplica = (S3FinalizedReplica) s3dataset.getReplicaInfo(eb);
+        assertEquals(eb.getBlockId(), finalizedReplica.getBlockId());
+        assertEquals(eb.getGenerationStamp(), finalizedReplica.getGenerationStamp());
+        assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedReplica.getState());
+
+        // Now do the append after increasing GS and expectedLen
+        // copy eb to new_eb
+        ExtendedBlock new_eb = new ExtendedBlock(eb.getBlockPoolId(), eb.getBlockId(), eb.getNumBytes(), eb.getGenerationStamp());
+        new_eb.setNumBytes(eb.getNumBytes());
+        
+        long newGS = new_eb.getGenerationStamp() + 1;
+        s3dataset.append(new_eb, newGS, new_eb.getNumBytes());
+
+        // make sure local files exist (downloaded)
+        ReplicaBeingWritten new_rbw_info = (ReplicaBeingWritten) s3dataset.getReplicaInfo(new_eb);
+        Assert.assertTrue(new_rbw_info.getBlockFile().exists());
+        Assert.assertTrue(new_rbw_info.getMetaFile().exists());
+        Assert.assertEquals(newGS, new_rbw_info.getGenerationStamp());
+        
+        // now finish this block again
+        new_eb.setGenerationStamp(newGS); // this GS bump happens somewhere else in DN
+        s3dataset.finalizeBlock(new_eb);
+
+        // check data is correct
+        S3FinalizedReplica finalizedAppend = (S3FinalizedReplica) s3dataset.getReplicaInfo(new_eb);
+        assertEquals(new_eb.getBlockId(), finalizedAppend.getBlockId());
+        assertEquals(new_eb.getGenerationStamp(), finalizedAppend.getGenerationStamp());
+        assertEquals(HdfsServerConstants.ReplicaState.FINALIZED, finalizedAppend.getState());
+        
+        // check that old EB doesnt exist
+        try {
+            S3FinalizedReplica oldBlock = (S3FinalizedReplica) s3dataset.getReplicaInfo(eb);
+            Assert.assertNull(oldBlock);
+        } catch (ReplicaNotFoundException err) {
+            Assert.assertTrue(err.getMessage().startsWith(ReplicaNotFoundException.NON_EXISTENT_REPLICA));
+        }
+    }
+
+    // test append
+    @Test
+    public void testAppendFailures() throws Exception {
         // set up replicasMap
         String bpid = cluster.getNamesystem().getBlockPoolId();
         ExtendedBlock[] blocks = setup_blocks(bpid, s3dataset);
 
-        // test append
-        testAppend(bpid, s3dataset, blocks);
-    }
 
-    private void testAppend(String bpid, S3DatasetImpl _dataset, ExtendedBlock[] blocks) throws IOException {
         long newGS = blocks[FINALIZED].getGenerationStamp() + 1;
-        final FsVolumeImpl v = (FsVolumeImpl) _dataset.getS3FinalizedReplica(blocks[FINALIZED]).getVolume();
+        final FsVolumeImpl v = (FsVolumeImpl) s3dataset.getS3FinalizedReplica(blocks[FINALIZED]).getVolume();
         long available = v.getCapacity() - v.getDfsUsed();
         long expectedLen = blocks[FINALIZED].getNumBytes();
         try {
             v.decDfsUsed(bpid, -available);
             blocks[FINALIZED].setNumBytes(expectedLen + 100);
-            _dataset.append(blocks[FINALIZED], newGS, expectedLen);
+            s3dataset.append(blocks[FINALIZED], newGS, expectedLen);
             Assert.fail(
                     "Should not have space to append to an RWR replica" + blocks[RWR]);
         } catch (DiskChecker.DiskOutOfSpaceException e) {
@@ -269,15 +309,14 @@ public class TestWriteToReplicaS3 {
         }
         v.decDfsUsed(bpid, available);
         blocks[FINALIZED].setNumBytes(expectedLen);
-        blocks[FINALIZED].setNumBytes(expectedLen);
 
         newGS = blocks[RBW].getGenerationStamp() + 1;
-        _dataset.append(blocks[FINALIZED], newGS,
+        s3dataset.append(blocks[FINALIZED], newGS,
                 blocks[FINALIZED].getNumBytes());  // successful
         blocks[FINALIZED].setGenerationStamp(newGS);
 
         try {
-            _dataset
+            s3dataset
                     .append(blocks[TEMPORARY], blocks[TEMPORARY].getGenerationStamp() + 1,
                             blocks[TEMPORARY].getNumBytes());
             Assert.fail("Should not have appended to a temporary replica " +
@@ -289,7 +328,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.append(blocks[RBW], blocks[RBW].getGenerationStamp() + 1,
+            s3dataset.append(blocks[RBW], blocks[RBW].getGenerationStamp() + 1,
                     blocks[RBW].getNumBytes());
             Assert.fail("Should not have appended to an RBW replica" + blocks[RBW]);
         } catch (ReplicaNotFoundException e) {
@@ -299,7 +338,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.append(blocks[RWR], blocks[RWR].getGenerationStamp() + 1,
+            s3dataset.append(blocks[RWR], blocks[RWR].getGenerationStamp() + 1,
                     blocks[RBW].getNumBytes());
             Assert.fail("Should not have appended to an RWR replica" + blocks[RWR]);
         } catch (ReplicaNotFoundException e) {
@@ -309,7 +348,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.append(blocks[RUR], blocks[RUR].getGenerationStamp() + 1,
+            s3dataset.append(blocks[RUR], blocks[RUR].getGenerationStamp() + 1,
                     blocks[RUR].getNumBytes());
             Assert.fail("Should not have appended to an RUR replica" + blocks[RUR]);
         } catch (ReplicaNotFoundException e) {
@@ -319,7 +358,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.append(blocks[NON_EXISTENT],
+            s3dataset.append(blocks[NON_EXISTENT],
                     blocks[NON_EXISTENT].getGenerationStamp(),
                     blocks[NON_EXISTENT].getNumBytes());
             Assert.fail("Should not have appended to a non-existent replica " +
@@ -331,12 +370,12 @@ public class TestWriteToReplicaS3 {
         }
 
         newGS = blocks[FINALIZED].getGenerationStamp() + 1;
-        _dataset.recoverAppend(blocks[FINALIZED], newGS,
+        s3dataset.recoverAppend(blocks[FINALIZED], newGS,
                 blocks[FINALIZED].getNumBytes());  // successful
         blocks[FINALIZED].setGenerationStamp(newGS);
 
         try {
-            _dataset.recoverAppend(blocks[TEMPORARY],
+            s3dataset.recoverAppend(blocks[TEMPORARY],
                     blocks[TEMPORARY].getGenerationStamp() + 1,
                     blocks[TEMPORARY].getNumBytes());
             Assert.fail("Should not have appended to a temporary replica " +
@@ -347,11 +386,11 @@ public class TestWriteToReplicaS3 {
         }
 
         newGS = blocks[RBW].getGenerationStamp() + 1;
-        _dataset.recoverAppend(blocks[RBW], newGS, blocks[RBW].getNumBytes());
+        s3dataset.recoverAppend(blocks[RBW], newGS, blocks[RBW].getNumBytes());
         blocks[RBW].setGenerationStamp(newGS);
 
         try {
-            _dataset.recoverAppend(blocks[RWR], blocks[RWR].getGenerationStamp() + 1,
+            s3dataset.recoverAppend(blocks[RWR], blocks[RWR].getGenerationStamp() + 1,
                     blocks[RBW].getNumBytes());
             Assert.fail("Should not have appended to an RWR replica" + blocks[RWR]);
         } catch (ReplicaNotFoundException e) {
@@ -360,7 +399,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.recoverAppend(blocks[RUR], blocks[RUR].getGenerationStamp() + 1,
+            s3dataset.recoverAppend(blocks[RUR], blocks[RUR].getGenerationStamp() + 1,
                     blocks[RUR].getNumBytes());
             Assert.fail("Should not have appended to an RUR replica" + blocks[RUR]);
         } catch (ReplicaNotFoundException e) {
@@ -369,7 +408,7 @@ public class TestWriteToReplicaS3 {
         }
 
         try {
-            _dataset.recoverAppend(blocks[NON_EXISTENT],
+            s3dataset.recoverAppend(blocks[NON_EXISTENT],
                     blocks[NON_EXISTENT].getGenerationStamp(),
                     blocks[NON_EXISTENT].getNumBytes());
             Assert.fail("Should not have appended to a non-existent replica " +
@@ -381,7 +420,7 @@ public class TestWriteToReplicaS3 {
     }
 
     @Test
-    public void testGetS3BlockWrongGS() throws Exception {
+    public void testGetS3BlockInvalidGS() throws Exception {
         ExtendedBlock eb = new ExtendedBlock(BLOCK_POOL_IDS[0], 2, 1, 2002);
 
         ReplicaBeingWritten rbwInfo = (ReplicaBeingWritten) s3dataset.createRbw(StorageType.DEFAULT, eb);

@@ -1,6 +1,5 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
-import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import org.apache.commons.io.FileUtils;
@@ -74,43 +73,22 @@ public class TestS3ConsistentRead {
     }
 
 
-    /**
-     * Tests reading a block file with incorrect GS that never updates. DN tries for awhile and eventually gives up.
-     * @throws IOException
-     */
-    @Test
-    public void testReadFileWrongGS() throws IOException {
-        FileSystem fs = cluster.getFileSystem();
-        Path new_file = new Path("/foo/bar2");
-        String test = "This is bananas";
-        DFSTestUtil.writeFile(fs, new_file, test);
-
-        final ExtendedBlock file_block = DFSTestUtil.getFirstBlock(fs, new_file);
-        update_block_gs(file_block.getBlockId(), 9990);
-        
-        // now read file, should fail
-        try {
-            String contents = DFSTestUtil.readFile(fs, new_file);
-            Assert.fail("Should not have retrieved block with incorrect generation stamp");
-        } catch (BlockMissingException err) {
-            Assert.assertTrue(err.getMessage().startsWith("Could not obtain block"));
-        }
-    }
     
-    private void update_block_gs(long blockId, long newGenStamp) {
+    private void update_block_gs(long blockId, long oldGenStamp, long newGenStamp) throws IOException {
         // Copy block to change metadata
-        String block_key = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), blockId);
+        String block_key_old = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), blockId, oldGenStamp);
+        String block_key_new = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), blockId, newGenStamp);
 
-        ObjectMetadata new_meta = new ObjectMetadata();
-        new_meta.addUserMetadata("generationstamp", String.valueOf(newGenStamp));
+//        ObjectMetadata new_meta = new ObjectMetadata();
+//        new_meta.addUserMetadata("generationstamp", String.valueOf(newGenStamp));
 
-        CopyObjectRequest copy_req = new CopyObjectRequest(s3dataset.getBucket(), block_key, s3dataset.getBucket(), block_key)
-                .withSourceBucketName(s3dataset.getBucket())
-                .withSourceKey(block_key)
-                .withNewObjectMetadata(new_meta);
+//        CopyObjectRequest copy_req = new CopyObjectRequest(s3dataset.getBucket(), block_key, s3dataset.getBucket(), block_key)
+//                .withSourceBucketName(s3dataset.getBucket())
+//                .withSourceKey(block_key)
+//                .withNewObjectMetadata(new_meta);
 
         S3AFileSystemCommon s3afs = s3dataset.getS3AFileSystem();
-        s3afs.getS3Client().copyObject(copy_req);
+        s3afs.rename(new Path(block_key_old), new Path(block_key_new));
     }
     
     private void upload_block(long blockId, String test_str, String block_key, long GS) {
@@ -150,7 +128,7 @@ public class TestS3ConsistentRead {
 
         // first change to incorrect GS
         final ExtendedBlock file_block = DFSTestUtil.getFirstBlock(fs, new_file);
-        update_block_gs(file_block.getBlockId(), 1234);
+        update_block_gs(file_block.getBlockId(), file_block.getGenerationStamp(), 1234);
 
         // start a thread to update S3 in parallel after sleeping
         Thread update_s3_later = new Thread(new Runnable() {
@@ -161,8 +139,14 @@ public class TestS3ConsistentRead {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                LOG.info("Now update block " + file_block.getBlockId() + " back to correct GS " + file_block.getGenerationStamp());
-                update_block_gs(file_block.getBlockId(), file_block.getGenerationStamp());
+                
+                try {
+                    LOG.info("Now update block " + file_block.getBlockId() + " back to correct GS " + file_block.getGenerationStamp());
+                    update_block_gs(file_block.getBlockId(), 1234, file_block.getGenerationStamp());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new CustomRuntimeException(e.getMessage());
+                }
                 // used to test s3guard wrong file 
 //                String block_key = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), file_block.getBlockId());
 //                upload_block(file_block.getBlockId(), test_str, block_key, 9102);
@@ -192,7 +176,7 @@ public class TestS3ConsistentRead {
 
         // delete block from S3 entirely
         final ExtendedBlock file_block = DFSTestUtil.getFirstBlock(fs, new_file);
-        final String delete_block_key = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), file_block.getBlockId());
+        final String delete_block_key = s3dataset.getBlockKey(cluster.getNamesystem().getBlockPoolId(), file_block.getBlockId(), file_block.getGenerationStamp());
         // dont go thru S3A so s3guard marks this as deleted
         s3dataset.getS3AFileSystem().getS3Client().deleteObject(s3dataset.getBucket(), delete_block_key);
 
@@ -217,5 +201,29 @@ public class TestS3ConsistentRead {
 
         update_s3_later.stop();
     }
-    
+
+
+
+    /**
+     * Tests reading a block file with incorrect GS that never updates. DN tries for awhile and eventually gives up.
+     * @throws IOException
+     */
+//    @Test
+//    public void testReadFileInvalidGS() throws IOException {
+//        FileSystem fs = cluster.getFileSystem();
+//        Path new_file = new Path("/foo/bar2");
+//        String test = "This is bananas";
+//        DFSTestUtil.writeFile(fs, new_file, test);
+//
+//        final ExtendedBlock file_block = DFSTestUtil.getFirstBlock(fs, new_file);
+//        update_block_gs(file_block.getBlockId(), file_block.getGenerationStamp(), 9990);
+//
+//        // now read file, should fail
+//        try {
+//            String contents = DFSTestUtil.readFile(fs, new_file);
+//            Assert.fail("Should not have retrieved block with incorrect generation stamp");
+//        } catch (BlockMissingException err) {
+//            Assert.assertTrue(err.getMessage().startsWith("Could not obtain block"));
+//        }
+//    }
 }

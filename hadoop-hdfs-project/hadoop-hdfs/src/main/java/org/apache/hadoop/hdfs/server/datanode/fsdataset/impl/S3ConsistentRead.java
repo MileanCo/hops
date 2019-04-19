@@ -23,7 +23,7 @@ public class S3ConsistentRead {
     private final int TIMEOUT = 10; // seconds
     private final long SLEEP_TIME = 1000; // milliseconds
     private final int MAX_TRIES = (int) ((double)TIMEOUT / ((double)SLEEP_TIME/1000));
-    
+
     public static String CONSISTENCY_ERROR = "Consistency Error";
 
     private Block blockMetadata;
@@ -34,17 +34,39 @@ public class S3ConsistentRead {
     }
 
     public Block getS3Block(ExtendedBlock b) {
-        return getS3Block(b.getGenerationStamp(), b.getBlockPoolId(), b.getBlockId());
+        return getS3Block(b.getBlockId(), b.getBlockPoolId(), b.getGenerationStamp());
     }
 
-    public Block getS3Block(long genStamp, String bpid, long blockId) {
-        String block_aws_key_str = S3DatasetImpl.getBlockKey(bpid, blockId);
+    // TODO: detect when we know block is supposed to be null and dont bother checking?
+    public Block getS3Block(long blockId, String bpid, long genStamp) {
+        // first check NN if this block is even supposed to exist
+        // TODO if we do get a NULL suddenly from NN, do we abandon this??
+//        // also Dont get blocks belonging to other blockpools... some tests will fail
+//        if (Arrays.asList(s3dataset.volumeMap.getBlockPoolList()).contains(bpid)) {
+//            try {
+//                blockMetadata = s3dataset.getNameNodeClient().getCompletedBlockMeta(blockId);
+//                LOG.info("Got block " + blockId + " from NN: " + blockMetadata);
+//            } catch (IOException e) {
+//                LOG.error(e);
+//            }
+//        } else {
+//            LOG.error("DN tried to access a blockpool it doesnt own: " + bpid);
+//        }
+//        if (blockMetadata == null) {
+//            return null;
+//        }
+
+        String block_aws_key_str = S3DatasetImpl.getBlockKey(bpid, blockId, genStamp);
+//        String block_meta_aws_key_str = S3DatasetImpl.getMetaKey(bpid, blockId, genStamp);
         Path block_aws_key = new Path(block_aws_key_str);
         try {
             ObjectMetadata s3Object_meta = s3dataset.getS3AFileSystem().getObjectMetadata(block_aws_key);
-            long blockGS = Long.parseLong(s3Object_meta.getUserMetadata().get("generationstamp"));
+            // TODO: why does normal HDFS have GS on meta filename but not block filename??
+            // Since the GS is part of the key, we dont need to take it from the filename or metadata
+            long blockGS = genStamp;
+//            long blockGS = Long.parseLong(s3Object_meta.getUserMetadata().get("generationstamp"));
             Block b = new Block(blockId, s3Object_meta.getInstanceLength(), blockGS);
-            
+
             if (genStamp != blockGS) {
                 throw new AmazonS3Exception("Block Generation Stamp mismatch. Expected: " + genStamp + " Actual: " + blockGS);
             }
@@ -58,21 +80,35 @@ public class S3ConsistentRead {
                 throw err;
             }
         }
-
         if (doesBlockExist(bpid, blockId)) {
-            return getS3Block(genStamp, bpid, blockId);
+            return getS3Block(blockId, bpid, genStamp);
         } else {
             return null;
         }
+
+//        tries++;
+//        if (tries > MAX_TRIES) {
+//            LOG.error(CONSISTENCY_ERROR + ": Failed to get block " + blockId + " from S3; timed out after " +
+//                    TIMEOUT + " seconds. Block exists in the Namenode.");
+//            return null;
+//        }
+//        try {
+//            // TODO: exponential backoff
+//            sleep(SLEEP_TIME);
+//        } catch(InterruptedException ex) {
+//            Thread.currentThread().interrupt();
+//        }
+//        // run again
+//        return getS3Block(blockId, bpid, genStamp);
     }
 
 
-    public InputStream getS3BlockMetaInputStream(String bpid, long blockId) {
-        String block_meta_aws_key_str = S3DatasetImpl.getBlockMetaKey(bpid, blockId);
+    public InputStream getS3BlockMetaInputStream(ExtendedBlock b) {
+        String block_meta_aws_key_str = S3DatasetImpl.getMetaKey(b.getBlockPoolId(), b.getBlockId(), b.getGenerationStamp());
         Path block_meta_aws_key = new Path(block_meta_aws_key_str);
-        LOG.info("Getting block meta file " + block_meta_aws_key);
+        LOG.info("Getting meta " + s3dataset.getBucket() + ":" + block_meta_aws_key);
         try {
-            s3dataset.getS3AFileSystem().getObjectMetadata(block_meta_aws_key);
+//            s3dataset.getS3AFileSystem().getObjectMetadata(block_meta_aws_key);
             FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
             return in.getWrappedStream();
         } catch (IOException err) {
@@ -85,21 +121,19 @@ public class S3ConsistentRead {
             }
         }
 
-        if (doesBlockExist(bpid, blockId)) {
-            return getS3BlockMetaInputStream(bpid, blockId);
+        if (doesBlockExist(b.getBlockPoolId(), b.getBlockId())) {
+            return getS3BlockMetaInputStream(b);
         } else {
             return null;
         }
     }
 
 
-    // TODO: add method with GS included --> not needed since these checks occur before reading block??
-
-    public InputStream getS3BlockInputStream(String bpid, long blockId, long seekOffset) {
-        String block_aws_key_str = S3DatasetImpl.getBlockKey(bpid, blockId);
+    public InputStream getS3BlockInputStream(ExtendedBlock b, long seekOffset) {
+        String block_aws_key_str = S3DatasetImpl.getBlockKey(b.getBlockPoolId(), b.getBlockId(), b.getGenerationStamp());
         Path block_aws_key = new Path(block_aws_key_str);
 
-        LOG.info("Getting block file " + s3dataset.getBucket() + ":" + block_aws_key + " with seekOffset " + seekOffset);
+        LOG.info("Getting block " + s3dataset.getBucket() + ":" + block_aws_key + " with seekOffset " + seekOffset);
 
         try {
             FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key);
@@ -116,8 +150,8 @@ public class S3ConsistentRead {
             }
         }
 
-        if (doesBlockExist(bpid, blockId)) {
-            return getS3BlockInputStream(bpid, blockId, seekOffset);
+        if (doesBlockExist(b.getBlockPoolId(), b.getBlockId())) {
+            return getS3BlockInputStream(b, seekOffset);
         } else {
             return null;
         }
@@ -140,18 +174,20 @@ public class S3ConsistentRead {
             } catch (IOException err) {
                 LOG.error(err);
             }
+        } else {
+            // only sleep after the first time trying incase we are checking for null.
+            try {
+                // TODO: exponential backoff
+                sleep(SLEEP_TIME);
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
         }
         tries++;
         if (tries > MAX_TRIES) {
             LOG.error(CONSISTENCY_ERROR + ": Failed to get block " + blockId + " from S3; timed out after " +
                     TIMEOUT + " seconds. Block exists in the Namenode.");
             return false;
-        }
-        try {
-            // TODO: exponential backoff
-            sleep(SLEEP_TIME);
-        } catch(InterruptedException ex) {
-            Thread.currentThread().interrupt();
         }
         return blockMetadata != null;
     }

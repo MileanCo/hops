@@ -3644,7 +3644,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
       @Override
       public void setUp() throws StorageException {
-        inodeIdentifier = 
+        inodeIdentifier =
             INodeUtil.resolveINodeFromBlock(lastBlock.getLocalBlock());
       }
 
@@ -8675,7 +8675,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       public Object performTask() throws IOException {
         // works in memory
         BlockInfo blockInfo = getStoredBlock(block);
-        if (blockInfo != null && blockInfo.isComplete()) {
+        if (blockInfo != null && 
+                (blockInfo.isComplete() || blockInfo.getBlockUCState().equals(BlockUCState.COMMITTED))) {
           return blockInfo;
         }
         return null;

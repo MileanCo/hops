@@ -525,14 +525,14 @@
 
   <property>
     <name>dfs.blockreport.intervalMsec</name>
-    <value>3600000</value>
+    <value>3600000000000000</value>
     <description>Determines block reporting interval in milliseconds.
     </description>
   </property>
 
   <property>
     <name>dfs.blockreport.initialDelay</name>
-    <value>0</value>
+    <value>999999999999999</value>
     <description>Delay for first block report in seconds.</description>
   </property>
 
@@ -1918,7 +1918,7 @@
 </property>
 <property>
   <name>dfs.datanode.s3_bucket</name>
-  <value>hopsfs-datanode-s3-test2</value>
+  <value>hops-datanode-test</value>
   <description>The bucket to use as backend store for the Datanode.
   </description>
 </property>

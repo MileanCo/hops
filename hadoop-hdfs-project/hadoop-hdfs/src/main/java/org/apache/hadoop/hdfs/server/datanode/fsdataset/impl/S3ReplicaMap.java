@@ -1,6 +1,7 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 
 public class S3ReplicaMap extends ReplicaMap {
@@ -31,7 +32,8 @@ public class S3ReplicaMap extends ReplicaMap {
         // check S3 if replicainfo is null
         if (replicaInfo == null) {
             // Get block from S3 consistently
-            replicaInfo = s3Dataset.getS3FinalizedReplica(block.getGenerationStamp(), bpid, block.getBlockId());
+            ExtendedBlock b = new ExtendedBlock(bpid, block);
+            replicaInfo = s3Dataset.getS3FinalizedReplica(b);
         }
         // check gen stamp and return
         if (replicaInfo != null && block.getGenerationStamp() == replicaInfo.getGenerationStamp()) {

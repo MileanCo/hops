@@ -45,10 +45,10 @@
   </property>
 
   <!-- Set default metadata store implementation -->
-  <property>
-    <name>fs.s3a.metadatastore.impl</name>
-    <value>org.apache.hadoop.fs.s3a.s3guard.NDBMetadataStore</value>
-  </property>
+  <!--<property>-->
+    <!--<name>fs.s3a.metadatastore.impl</name>-->
+    <!--<value>org.apache.hadoop.fs.s3a.s3guard.NDBMetadataStore</value>-->
+  <!--</property>-->
 
   <!-- Convenience definitions. -->
   <property>
@@ -59,6 +59,10 @@
   <property>
     <name>s3guard.dynamo</name>
     <value>org.apache.hadoop.fs.s3a.s3guard.DynamoDBMetadataStore</value>
+  </property>
+  <property>
+    <name>s3guard.ndb</name>
+    <value>org.apache.hadoop.fs.s3a.s3guard.NDBMetadataStore</value>
   </property>
 
   <!--
@@ -83,6 +87,11 @@
   <property>
     <name>ireland.endpoint</name>
     <value>s3-eu-west-1.amazonaws.com</value>
+  </property>
+
+  <property>
+    <name>stockholm.endpoint</name>
+    <value>s3-eu-north-1.amazonaws.com</value>
   </property>
 
   <property>

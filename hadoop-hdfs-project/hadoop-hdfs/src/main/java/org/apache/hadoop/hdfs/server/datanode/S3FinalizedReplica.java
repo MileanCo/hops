@@ -72,7 +72,7 @@ public class S3FinalizedReplica extends FinalizedReplica {
                 "\n  getBytesOnDisk()  = " + getBytesOnDisk() +
                 "\n  getVisibleLength()= " + getVisibleLength() +
                 "\n  getBucket()       = " + getBucket() + 
-                "\n  getKey()    = " + S3DatasetImpl.getBlockKey(blockPoolID, getBlockId());
+                "\n  getKey()    = " + S3DatasetImpl.getBlockKey(blockPoolID, getBlockId(), getGenerationStamp());
     }
             
 }
