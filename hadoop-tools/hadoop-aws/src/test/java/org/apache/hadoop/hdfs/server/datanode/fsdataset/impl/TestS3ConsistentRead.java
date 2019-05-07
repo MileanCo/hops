@@ -39,7 +39,6 @@ public class TestS3ConsistentRead {
     private DataNode dn;
     private S3DatasetImpl s3dataset;
     private Configuration conf;
-    private final String TEST_BUCKET = "hopsfs-datanode-s3-test";
     
     @Before
     public void setUp() throws IOException {
@@ -49,9 +48,6 @@ public class TestS3ConsistentRead {
         dn = cluster.getDataNodes().get(0);
         s3dataset = (S3DatasetImpl) DataNodeTestUtils.getFSDataset(dn);
         s3dataset.addBlockPool(BLOCK_POOL_IDS[0], dn.getConf());
-
-        conf.set(DFSConfigKeys.S3_DATASET_BUCKET, TEST_BUCKET);
-
     }
     
     /**

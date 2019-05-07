@@ -18,9 +18,6 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
 import com.google.common.annotations.VisibleForTesting;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.fs.FSOutputSummer;
@@ -43,24 +40,17 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.nativeio.NativeIO;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
+import org.apache.hadoop.util.StringUtils;
+import org.apache.hadoop.util.Time;
 
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.zip.Checksum;
 
 import static org.apache.hadoop.hdfs.server.datanode.DataNode.DN_CLIENTTRACE_FORMAT;
-import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.util.Time;
 
 /**
  * A class that receives a block and writes to its own disk, meanwhile
@@ -188,8 +178,14 @@ class BlockReceiver implements Closeable {
       } else {
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
+            Date date_rbw = new Date();
+            
             replicaInfo = datanode.data.createRbw(storageType, block);
             datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
+            
+            long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
+            System.out.println("createRBW time: " + diffInMillies);
+            
             break;
           case PIPELINE_SETUP_STREAMING_RECOVERY:
             replicaInfo = datanode.data
@@ -776,7 +772,6 @@ class BlockReceiver implements Closeable {
             new PacketResponder(replyOut, mirrIn, downstreams));
         responder.start(); // start thread to processes responses
       }
-
       while (receivePacket() >= 0) { /* Receive until the last packet */ }
 
       // wait for all outstanding packet responses. And then
@@ -801,7 +796,12 @@ class BlockReceiver implements Closeable {
         } else {
           // for isDatnode or TRANSFER_FINALIZED
           // Finalize the block.
+          Date finalize_blk_time = new Date();
+          
           datanode.data.finalizeBlock(block);
+          
+          long diffInMillies_finalize = (new Date()).getTime() - finalize_blk_time.getTime();
+          System.out.println("finalize_blk_time " + diffInMillies_finalize);
         }
         datanode.metrics.incrBlocksWritten();
       }
@@ -953,6 +953,7 @@ class BlockReceiver implements Closeable {
 
       // open meta file and read in crc value computer earlier
       IOUtils.readFully(instr.getChecksumIn(), crcbuf, 0, crcbuf.length);
+      LOG.info("Read tmp input stream successfully for " + block);
     } finally {
       IOUtils.closeStream(instr);
     }
@@ -1156,6 +1157,8 @@ class BlockReceiver implements Closeable {
     public void run() {
       boolean lastPacketInBlock = false;
       final long startTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime() : 0;
+      
+      Date start_packet_responder = new Date();
       while (isRunning() && !lastPacketInBlock) {
 
         long totalAckTimeNanos = 0;
@@ -1247,8 +1250,11 @@ class BlockReceiver implements Closeable {
             running = false;
             continue;
           }
-
           if (lastPacketInBlock) {
+            
+            long diffInMillies = (new Date()).getTime() - start_packet_responder.getTime();
+            System.out.println("packet_responder: " + diffInMillies);
+            
             // Finalize the block and close the block file
             try {
               finalizeBlock(startTime);

@@ -85,21 +85,6 @@ public class S3ConsistentRead {
         } else {
             return null;
         }
-
-//        tries++;
-//        if (tries > MAX_TRIES) {
-//            LOG.error(CONSISTENCY_ERROR + ": Failed to get block " + blockId + " from S3; timed out after " +
-//                    TIMEOUT + " seconds. Block exists in the Namenode.");
-//            return null;
-//        }
-//        try {
-//            // TODO: exponential backoff
-//            sleep(SLEEP_TIME);
-//        } catch(InterruptedException ex) {
-//            Thread.currentThread().interrupt();
-//        }
-//        // run again
-//        return getS3Block(blockId, bpid, genStamp);
     }
 
 

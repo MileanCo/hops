@@ -557,10 +557,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     FSNamesystem namesystem = new FSNamesystem(conf, namenode, false);
     StartupOption startOpt = NameNode.getStartupOption(conf);
+    
     if (startOpt == StartupOption.RECOVER) {
       namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
     }
-    
+
     if (RollingUpgradeStartupOption.ROLLBACK.matches(startOpt)) {
         rollBackRollingUpgradeTX();
     }
@@ -4994,20 +4995,22 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   boolean setSafeMode(SafeModeAction action) throws IOException {
-    if (action != SafeModeAction.SAFEMODE_GET) {
-      checkSuperuserPrivilege();
-      switch (action) {
-        case SAFEMODE_LEAVE: // leave safe mode
-          leaveSafeMode();
-          break;
-        case SAFEMODE_ENTER: // enter safe mode
-          enterSafeMode(false);
-          break;
-        default:
-          LOG.error("Unexpected safe mode action");
-      }
-    }
-    return isInSafeMode();
+    // TODO: for now, turn off block report when NN starts
+    return false;
+//    if (action != SafeModeAction.SAFEMODE_GET) {
+//      checkSuperuserPrivilege();
+//      switch (action) {
+//        case SAFEMODE_LEAVE: // leave safe mode
+//          leaveSafeMode();
+//          break;
+//        case SAFEMODE_ENTER: // enter safe mode
+//          enterSafeMode(false);
+//          break;
+//        default:
+//          LOG.error("Unexpected safe mode action");
+//      }
+//    }
+//    return isInSafeMode();
   }
 
   @Override

@@ -2599,7 +2599,14 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     flushInternal();             // flush all data to Datanodes
     // get last block before destroying the streamer
     ExtendedBlock lastBlock = streamer.getBlock();
+    
+    Date start_close = new Date();
+    
     completeFile(lastBlock);
+    
+    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
+    System.out.println("completeFile(): " + diffInMillies_close);
+    
     closeThreads(false);
     dfsClient.endFileLease(fileId);
   }
@@ -2612,16 +2619,14 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     }
 
     long localstart = Time.now();
-    long localTimeout = 400;
+    long localTimeout = dfsClient.getCompleteFileTimeout();
     boolean fileComplete = false;
     int retries = dfsClient.getConf().nBlockWriteLocateFollowingRetry;
-
+    
     backoffBeforeClose(last);
-
+    
     while (!fileComplete) {
-
       fileComplete = completeFileInternal(last);
-
       if (!fileComplete) {
         final int hdfsTimeout = dfsClient.getHdfsTimeout();
         if (!dfsClient.clientRunning || (hdfsTimeout > 0 && localstart + hdfsTimeout < Time.now())) {
@@ -2668,7 +2673,9 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     if (canStoreFileInDB()) {
       data = getSmallFileData();
     }
-
+    
+    Date start_close = new Date();
+    
     try {
       fileComplete =
               dfsClient.namenode.complete(src, dfsClient.clientName, last, fileId, data);
@@ -2683,6 +2690,10 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
         throw e;
       }
     }
+    
+    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
+    System.out.println("dfsClient.namenode.complete(): " + diffInMillies_close);
+    
     return fileComplete;
   }
 

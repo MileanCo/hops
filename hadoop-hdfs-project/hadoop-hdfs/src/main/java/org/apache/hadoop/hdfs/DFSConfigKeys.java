@@ -573,6 +573,9 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final int DFS_DATANODE_SOCKET_REUSE_KEEPALIVE_DEFAULT = 4000;
   public static final String  DFS_DATANODE_OOB_TIMEOUT_KEY = "dfs.datanode.oob.timeout-ms";
   public static final String  DFS_DATANODE_OOB_TIMEOUT_DEFAULT = "1500,0,0,0"; // OOB_TYPE1, OOB_TYPE2, OOB_TYPE3, OOB_TYPE4
+  public static final String DFS_CLIENT_COMPLETE_FILE_TIMEOUT = "dfs.client.complete_file_timeout";
+  public static final int DFS_CLIENT_COMPLETE_FILE_TIMEOUT_DEFAULT = 400;
+  
 
   public static final String DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS = "dfs.datanode.cache.revocation.timeout.ms";
   public static final long DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS_DEFAULT = 900000L;

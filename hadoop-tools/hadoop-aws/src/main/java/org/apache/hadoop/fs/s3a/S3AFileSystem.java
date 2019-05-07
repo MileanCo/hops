@@ -569,6 +569,7 @@ public class S3AFileSystem extends S3AFileSystemCommon {
       Progressable progress) throws IOException {
     String key = pathToKey(f);
     FileStatus status = null;
+    Date d = new Date();
     try {
       // get the status or throw an FNFE
       status = getFileStatus(f);
@@ -587,6 +588,8 @@ public class S3AFileSystem extends S3AFileSystemCommon {
       // this means the file is not found
 
     }
+    long time_status = (new Date()).getTime() - d.getTime();
+    LOG.info("!!! status time: " + time_status + " ms");
     instrumentation.fileCreated();
     FSDataOutputStream output;
     if (blockUploadEnabled) {
@@ -2009,7 +2012,6 @@ public class S3AFileSystem extends S3AFileSystemCommon {
           + " to "  + dst + ", cancelling");
     }
     listener.uploadCompleted();
-
     // This will delete unnecessary fake parent directories
     finishedWrite(key, info.getLength());
 
@@ -2229,18 +2231,18 @@ public class S3AFileSystem extends S3AFileSystemCommon {
       keysToRemove.add(new DeleteObjectsRequest.KeyVersion(key));
       path = path.getParent();
     }
-    try {
-      removeKeys(keysToRemove, false, true);
-    } catch(AmazonClientException | InvalidRequestException e) {
-      instrumentation.errorIgnored();
-      if (LOG.isDebugEnabled()) {
-        StringBuilder sb = new StringBuilder();
-        for(DeleteObjectsRequest.KeyVersion kv : keysToRemove) {
-          sb.append(kv.getKey()).append(",");
-        }
-        LOG.debug("While deleting keys {} ", sb.toString(), e);
-      }
-    }
+//    try {
+//      removeKeys(keysToRemove, false, true);
+//    } catch(AmazonClientException | InvalidRequestException e) {
+//      instrumentation.errorIgnored();
+//      if (LOG.isDebugEnabled()) {
+//        StringBuilder sb = new StringBuilder();
+//        for(DeleteObjectsRequest.KeyVersion kv : keysToRemove) {
+//          sb.append(kv.getKey()).append(",");
+//        }
+//        LOG.debug("While deleting keys {} ", sb.toString(), e);
+//      }
+//    }
   }
 
   private void createFakeDirectory(final String objectName)
