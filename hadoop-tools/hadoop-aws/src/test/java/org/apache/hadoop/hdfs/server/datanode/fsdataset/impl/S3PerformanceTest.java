@@ -28,8 +28,8 @@ public class S3PerformanceTest {
     private String bucket;
     
     // test settings./autogen.sh
-    private final boolean use_hdfs_s3_dataset = false;
-    private final boolean use_local_s3 = true;
+    private final boolean use_hdfs_s3_dataset = true;
+    private final boolean use_local_s3 = false;
     private final boolean do_append = false;
     
     private static final boolean verboseOption = false;
@@ -100,7 +100,7 @@ public class S3PerformanceTest {
     @Test
     public void testS3RecordTime10MB() throws IOException {
         long BLOCK_SIZE = 1024 * 10000; // bytes
-        long BLOCK_SIZE_META = 80700; // bytes
+        long BLOCK_SIZE_META = 80007; // bytes
         int WR_NTIMES = 30;
         run_id = "/s3_perf_run" + random.nextInt(10000);
 
