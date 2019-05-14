@@ -22,6 +22,8 @@ import java.net.URI;
 import java.util.Date;
 import java.util.Random;
 
+import static org.apache.hadoop.fs.s3a.Constants.FAST_UPLOAD;
+
 public class S3PerformanceTest {
     private AmazonS3 s3client;
     private S3AFileSystem s3afs;
@@ -30,6 +32,7 @@ public class S3PerformanceTest {
     // test settings./autogen.sh
     private final boolean use_hdfs_s3_dataset = true;
     private final boolean use_local_s3 = false;
+    private final boolean use_fast_upload_s3a = false;
     private final boolean do_append = false;
     
     private static final boolean verboseOption = false;
@@ -124,6 +127,9 @@ public class S3PerformanceTest {
         Configuration conf = new HdfsConfiguration();
         conf.setBoolean("test.use_local_s3", use_local_s3);
         conf.setBoolean(DFSConfigKeys.S3_DATASET, use_hdfs_s3_dataset);
+        
+        conf.setBoolean(FAST_UPLOAD, use_fast_upload_s3a);
+        
         conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, blocksize);
         // setup a cluster to run with
         if (use_hdfs_s3_dataset) {
@@ -201,6 +207,7 @@ public class S3PerformanceTest {
     
     private void testS3(long fileSize, long fileSizeMeta, int wr_ntimes) throws IOException {
         Configuration conf = new HdfsConfiguration();
+        conf.setBoolean(FAST_UPLOAD, use_fast_upload_s3a);
         
         // set up a normal S3 file system
         this.s3afs = new S3AFileSystem();

@@ -5,7 +5,8 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.S3DatasetImpl;
 
-// S3 does not have Volumes - they are not needed.
+// S3 does not have Volumes - they are not needed. 
+// Instead, it has a bucket and blockPoolId to identify where this block is.
 public class S3FinalizedReplica extends FinalizedReplica {
     
     private String bucket;
@@ -18,12 +19,6 @@ public class S3FinalizedReplica extends FinalizedReplica {
         this.bucket = bucket;
         
     }
-    // have to specify len somehow
-//    public S3FinalizedReplica(ExtendedBlock block, FsVolumeImpl vol, String bucket) {
-//        super(block.getBlockId(), block.getGenerationStamp(), vol, null);
-//        this.blockPoolID = block.getBlockPoolId();
-//        this.bucket = bucket;
-//    }
     
     public S3FinalizedReplica (Block block, String bpid, FsVolumeImpl vol, String bucket) {
         super(block.getBlockId(), block.getNumBytes(), block.getGenerationStamp(), vol, null);
@@ -34,16 +29,6 @@ public class S3FinalizedReplica extends FinalizedReplica {
     @Override  // Replica
     public HdfsServerConstants.ReplicaState getState() {
         return HdfsServerConstants.ReplicaState.FINALIZED;
-    }
-    
-    @Override
-    public long getBytesOnDisk() {
-        return super.getNumBytes();
-    }
-
-    @Override
-    public long getVisibleLength() {
-        return super.getNumBytes();
     }
 
     // TODO: return the default vol that this block would be downloaded to?

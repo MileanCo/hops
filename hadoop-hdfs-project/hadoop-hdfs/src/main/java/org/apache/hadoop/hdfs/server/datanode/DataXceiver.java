@@ -624,12 +624,11 @@ class DataXceiver extends Receiver implements Runnable {
                 peer.getLocalAddressString(), stage,
                 latestGenerationStamp, minBytesRcvd, maxBytesRcvd, clientname,
                 srcDataNode, datanode, requestedChecksum, cachingStrategy);
-
-        long diffInMillies = (new Date()).getTime() - start_recv.getTime();
-        System.out.println("new_BlockReceiver: " + diffInMillies);
+        
+        System.out.println("new_BlockReceiver: " + ((new Date()).getTime() - start_recv.getTime()));
         
         storageUuid = blockReceiver.getStorageUuid();
-      } else {
+      } else {  
         storageUuid = datanode.data.recoverClose(block, latestGenerationStamp, minBytesRcvd);
       }
 
@@ -733,6 +732,7 @@ class DataXceiver extends Receiver implements Runnable {
 
       // receive the block and mirror to the next target
       Date start_receiveBlock = new Date();
+      System.out.println("... Starting to collect start__receiveBlock");
       
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;

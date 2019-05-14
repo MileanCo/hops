@@ -23,9 +23,7 @@ public class S3ConsistentRead {
     private final int TIMEOUT = 10; // seconds
     private final long SLEEP_TIME = 1000; // milliseconds
     private final int MAX_TRIES = (int) ((double)TIMEOUT / ((double)SLEEP_TIME/1000));
-
-    public static String CONSISTENCY_ERROR = "Consistency Error";
-
+    
     private Block blockMetadata;
     private int tries = 0;
 
@@ -75,7 +73,7 @@ public class S3ConsistentRead {
             // S3Guard exceptions appear here
             throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
-            LOG.error(err);
+            LOG.error(block_aws_key + " : " + err);
             if (! err.toString().contains("404 Not Found") && ! err.toString().contains("Generation Stamp mismatch")) {
                 throw err;
             }
@@ -100,7 +98,7 @@ public class S3ConsistentRead {
             // S3Guard exceptions appear here
             throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
-            LOG.error(err);
+            LOG.error(block_meta_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
                 throw new CustomRuntimeException(err.getMessage());
             }
@@ -129,7 +127,7 @@ public class S3ConsistentRead {
             // S3Guard exceptions appear here
             throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
-            LOG.error(err);
+            LOG.error(block_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
                 throw new CustomRuntimeException(err.getMessage());
             }
@@ -170,7 +168,7 @@ public class S3ConsistentRead {
         }
         tries++;
         if (tries > MAX_TRIES) {
-            LOG.error(CONSISTENCY_ERROR + ": Failed to get block " + blockId + " from S3; timed out after " +
+            LOG.error("Consistency Error: Failed to get block " + blockId + " from S3; timed out after " +
                     TIMEOUT + " seconds. Block exists in the Namenode.");
             return false;
         }
