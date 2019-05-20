@@ -23,7 +23,7 @@ public class S3ConsistentRead {
     private final int TIMEOUT = 10; // seconds
     private final long SLEEP_TIME = 1000; // milliseconds
     private final int MAX_TRIES = (int) ((double)TIMEOUT / ((double)SLEEP_TIME/1000));
-    
+
     private Block blockMetadata;
     private int tries = 0;
 
