@@ -84,7 +84,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public synchronized ReplicaInPipeline createRbw(StorageType storageType,
                                                     ExtendedBlock b) throws IOException {
         // checks local filesystem and S3 for the block
-        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
         if (replicaInfo != null) {
             throw new ReplicaAlreadyExistsException("Block " + b +
                     " already exists in state " + replicaInfo.getState() +
