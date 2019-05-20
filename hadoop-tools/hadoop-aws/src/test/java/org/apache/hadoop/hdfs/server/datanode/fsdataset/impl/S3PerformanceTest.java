@@ -77,7 +77,7 @@ public class S3PerformanceTest {
 
     @Test
     public void testHDFSRecordTime1MB() throws IOException {
-        long FILE_SIZE = 1024 * 1000; // bytes
+        long FILE_SIZE = 1048576; // bytes
         int WR_NTIMES = 30;
         String run_id = "/perf_run" + random.nextInt(10000);
         testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES, run_id);
@@ -124,8 +124,8 @@ public class S3PerformanceTest {
 
     @Test
     public void testS3RecordTime1MB() throws IOException {
-        long BLOCK_SIZE = 1024 * 1000; // bytes
-        long BLOCK_SIZE_META = 8007; // bytes
+        long BLOCK_SIZE = 1048576; // bytes
+        long BLOCK_SIZE_META = 8199; // bytes
         int WR_NTIMES = 1000;
         String run_id = "/s3_perf_run" + random.nextInt(10000);
 
