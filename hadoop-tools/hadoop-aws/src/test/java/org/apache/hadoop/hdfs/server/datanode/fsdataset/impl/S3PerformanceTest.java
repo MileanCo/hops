@@ -136,8 +136,8 @@ public class S3PerformanceTest {
     public void testS3RecordTime1MB_parallel_clients() throws IOException {
         final int NUM_CLIENTS = 10;
         class FakeClient implements Runnable {
-            long BLOCK_SIZE = 1024 * 1000; // bytes
-            long BLOCK_SIZE_META = 8007; // bytes
+            long BLOCK_SIZE = 1048576; // bytes
+            long BLOCK_SIZE_META = 8199; // bytes
             int WR_NTIMES = 1000 / NUM_CLIENTS ;
             String run_id = "/s3_perf_run" + random.nextInt(1000000);
             
