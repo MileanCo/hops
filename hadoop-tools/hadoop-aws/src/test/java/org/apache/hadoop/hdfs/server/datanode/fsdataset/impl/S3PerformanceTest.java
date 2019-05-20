@@ -111,6 +111,16 @@ public class S3PerformanceTest {
     }
 
     @Test
+    public void testS3RecordTime1MB() throws IOException {
+        long BLOCK_SIZE = 1024 * 1000; // bytes
+        long BLOCK_SIZE_META = 80007; // bytes
+        int WR_NTIMES = 1000;
+        run_id = "/s3_perf_run" + random.nextInt(10000);
+
+        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES);
+    }
+
+    @Test
     public void testS3RecordTime100K() throws IOException {
         long BLOCK_SIZE = 1024 * 100; // bytes
         long BLOCK_SIZE_META = 807; // bytes
