@@ -305,7 +305,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
         
         ExtendedBlock old_b = new ExtendedBlock(b.getBlockPoolId(), b.getBlockId(), b.getNumBytes(), b.getGenerationStamp());
         old_b.setGenerationStamp(old_b.getGenerationStamp() - 1);
-        if (contains(old_b)) {
+//        if (contains(old_b)) {
+        if (false) {
             s3afs.delete(new Path(getBlockKey(old_b)), false);
             s3afs.delete(new Path(getMetaKey(old_b)), false);
             LOG.info("Deleted old finalized block " + old_b + " for append.");

@@ -3,7 +3,6 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.S3ClientOptions;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
 import org.apache.commons.io.FileUtils;
@@ -130,7 +129,7 @@ public class S3PerformanceTest {
         final int NUM_CLIENTS = 10;
         class FakeClient implements Runnable {
             long BLOCK_SIZE = 1024 * 1000; // bytes
-            long BLOCK_SIZE_META = 80007; // bytes
+            long BLOCK_SIZE_META = 8007; // bytes
             int WR_NTIMES = 1000 / NUM_CLIENTS ;
             String run_id = "/s3_perf_run" + random.nextInt(1000000);
             
@@ -329,6 +328,7 @@ public class S3PerformanceTest {
         int time_read_count = 0;
         
         Date beginTime = new Date();
+        LOG.info("=== Starting WRITE process");
         for (int i =0; i < num_files; i++) {
             String fname = run_id + "/block_" + i;
             String fname_meta = fname + ".meta";
@@ -393,7 +393,8 @@ public class S3PerformanceTest {
                     // fake checking status of the file once
                     try {
                         // do this OR s3afs.contains
-                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
+                        s3afs.exists(new Path(fname));
+//                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
                     } catch (AmazonS3Exception err) {
                         LOG.info(err);
                         if (! err.getMessage().contains("404 Not Found")) {
@@ -402,7 +403,7 @@ public class S3PerformanceTest {
                     }
                     long diffInMillies_create_file = (new Date()).getTime() - start_create.getTime();
                     time_create += diffInMillies_create_file;
-                    LOG.info("=== Client create file: " + diffInMillies_create_file + " ms");
+                    LOG.info(" Client create file: " + diffInMillies_create_file + " ms");
 
 
 //                     WRITE new meta file
@@ -411,7 +412,7 @@ public class S3PerformanceTest {
                     FileUtils.writeByteArrayToFile(local_meta_file, outMetaBuffer);
                     long diffInMillies_write_meta2 = (new Date()).getTime() - start_write_meta2.getTime();
                     time_write += diffInMillies_write_meta2;
-                    LOG.info("=== Client write file: " + diffInMillies_write_meta2 + " ms to create new file & return output handle");
+                    LOG.info(" Client write file: " + diffInMillies_write_meta2 + " ms to create new file & return output handle");
 
 //
                     // WRITE BLOCK FILE
@@ -422,7 +423,7 @@ public class S3PerformanceTest {
                     long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
                     time_write += diffInMillies_write;
                     time_write_count++; // only once
-                    LOG.info("=== Client write file: " + diffInMillies_write + " ms to write all data to file");
+                    LOG.info(" Client write file: " + diffInMillies_write + " ms to write all data to file");
                     
 
                     // CLOSE BLOCK
@@ -447,44 +448,11 @@ public class S3PerformanceTest {
                     long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
                     time_close += diffInMillies_close;
                     time_close_count++; // only do this once
-                    LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
+                    LOG.info(" Client close file: " + diffInMillies_close + " ms to upload file to s3" );
 
 
                     local_block_file.delete();
                     local_meta_file.delete();
-
-//                    time_close_count++; // dont increase close count b/c this time is counted together with block time
-                    Date start_read = new Date();
-                    File dest1 = new File(local_block_file + ".downloaded");
-                    File dest2 = new File(local_meta_file + ".downloaded");
-                    FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname)).getWrappedStream(), dest1);
-                    FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname_meta)).getWrappedStream(), dest2);
-
-                    time_read += (new Date()).getTime() - start_read.getTime();
-                    time_read_count++;
-
-                    
-                    // close meta block
-//                    Date start_close_meta = new Date();
-//                    PutObjectRequest putReqMeta = new PutObjectRequest(bucket, fname_meta.substring(1), local_meta_file);
-//                    s3client.putObject(putReqMeta);
-//                    time_close += (new Date()).getTime() - start_close_meta.getTime();
-//                    local_meta_file.delete();
-                    
-                    
-                    // make sure file exists
-                    if (! dest1.exists()) {
-                        Assert.fail("File " + dest1 + " failed to download");
-                    }
-                    if (! dest2.exists()) {
-                        Assert.fail("File " + dest2 + " failed to download");
-                    }
-
-                    // cleanup
-                    dest1.delete();
-                    dest2.delete();
-
-
 
                     // reads this from S3 now
 //                        readData(fname, inBuffer, outBuffer.length, 0, fs, blockSize);
@@ -517,48 +485,75 @@ public class S3PerformanceTest {
                     time_close_count++;
                     LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
                     
-                    // Read the file
-                    Date start_read = new Date();
-
-                    File dest1  = new File("tmp" + fname + ".downloaded");
-                    FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
-
-                    // make sure file exists
-                    if (! dest1.exists()) {
-                        Assert.fail("File " + dest1 + " failed to download");
-                    }
-
-//                    long byteVisibleToRead = readData(fname, inBuffer, outBuffer.length, 0, fs, blockSize);
-//                    String readmsg =
-//                            "Written=" + outBuffer.length + " ; Expected Visible=" +
-//                                    outBuffer.length + " ; Got Visible=" + byteVisibleToRead +
-//                                    " of file " + fname;
-
-                    long diffInMillies_read = (new Date()).getTime() - start_read.getTime();
-                    time_read += diffInMillies_read;
-                    time_read_count++;
-                    // cleanup
-                    dest1.delete();
+//                    // Read the file
+//                    Date start_read = new Date();
 //
-//                    if (verboseOption) {
-//                        LOG.info(readmsg);
+//                    File dest1  = new File("tmp" + fname + ".downloaded");
+//                    FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
+//
+//                    // make sure file exists
+//                    if (! dest1.exists()) {
+//                        Assert.fail("File " + dest1 + " failed to download");
 //                    }
-                    
+//                    
+//                    long diffInMillies_read = (new Date()).getTime() - start_read.getTime();
+//                    time_read += diffInMillies_read;
+//                    time_read_count++;
+//                    // cleanup
+//                    dest1.delete();
+
                 }
-//                if (byteVisibleToRead >= totalByteVisible && byteVisibleToRead <= totalByteWritten) {
-//                    readmsg =
-//                            "pass: reader sees expected number of visible byte. " + readmsg +
-//                                    " [pass]";
-//                } else {
-//                    countOfFailures++;
-//                    readmsg =
-//                            "fail: reader see different number of visible byte. " + readmsg +
-//                                    " [fail]";
-//                }
             } catch (IOException e) {
                 LOG.error(e.getMessage());
             }
         }
+
+        LOG.info("=== Starting READ process");
+        for (int i =0; i < num_files; i++) {
+            try {
+                String fname = run_id + "/block_" + i;
+                String fname_meta = fname + ".meta";
+                File local_block_file = new File("tmp" + fname);
+                File local_meta_file  = new File("tmp" + fname_meta);
+
+                LOG.info("Reading file " + fname);
+                Date start_read = new Date();
+                File dest1 = new File(local_block_file + ".downloaded");
+                FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname)).getWrappedStream(), dest1);
+
+                // make sure file exists
+                if (! dest1.exists()) {
+                    Assert.fail("File " + dest1 + " failed to download");
+                }
+                // cleanup
+                dest1.delete();
+
+                if (is_s3) {
+                    File dest2 = new File(local_meta_file + ".downloaded");
+                    FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname_meta)).getWrappedStream(), dest2);
+                    if (! dest2.exists()) {
+                        Assert.fail("File " + dest2 + " failed to download");
+                    }
+                    dest2.delete();
+                }
+                
+                time_read += (new Date()).getTime() - start_read.getTime();
+                time_read_count++;
+
+
+                // close meta block
+//                    Date start_close_meta = new Date();
+//                    PutObjectRequest putReqMeta = new PutObjectRequest(bucket, fname_meta.substring(1), local_meta_file);
+//                    s3client.putObject(putReqMeta);
+//                    time_close += (new Date()).getTime() - start_close_meta.getTime();
+//                    local_meta_file.delete();
+                
+            } catch (IOException e) {
+                LOG.error(e);
+            }
+            
+        }
+        
         Date endTime = new Date();
         Assert.assertEquals(0, countOfFailures);
         
