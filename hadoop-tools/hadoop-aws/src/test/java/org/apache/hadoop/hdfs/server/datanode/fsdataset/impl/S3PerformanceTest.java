@@ -5,6 +5,7 @@ import com.amazonaws.services.s3.S3ClientOptions;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectResult;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -14,7 +15,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
-import org.apache.hadoop.fs.s3a.UploadInfo;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import java.io.*;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Random;
 
@@ -43,7 +44,6 @@ public class S3PerformanceTest {
     private static final boolean verboseOption = false;
     protected static final String ROOT_DIR = "/tmp/";
     private static final boolean positionReadOption = false;
-    private String run_id;
 
     protected static Log LOG = LogFactory.getLog(S3PerformanceTest.class);
     private Random random = new Random();
@@ -64,16 +64,16 @@ public class S3PerformanceTest {
     public void testHDFSRecordTime100MB() throws IOException {
         long FILE_SIZE = 1024 * 100000; // bytes
         int WR_NTIMES = 30;
-        run_id = "/perf_run" + random.nextInt(10000);
-        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES);
+        String run_id = "/perf_run" + random.nextInt(10000);
+        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES, run_id);
     }
     
     @Test
     public void testHDFSRecordTime10MB() throws IOException {
         long FILE_SIZE = 1024 * 10000; // bytes
         int WR_NTIMES = 30;
-        run_id = "/perf_run" + random.nextInt(10000);
-        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES);
+        String run_id = "/perf_run" + random.nextInt(10000);
+        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES, run_id);
     }
 
     @Test
@@ -81,16 +81,16 @@ public class S3PerformanceTest {
         long FILE_SIZE = 512 * 10000; // bytes
         long BLOCK_SIZE = 1024 * 10000; // bytes
         int WR_NTIMES = 30;
-        run_id = "/perf_run" + random.nextInt(10000);
-        testHDFS(FILE_SIZE, BLOCK_SIZE, WR_NTIMES);
+        String run_id = "/perf_run" + random.nextInt(10000);
+        testHDFS(FILE_SIZE, BLOCK_SIZE, WR_NTIMES, run_id);
     }
 
     @Test
     public void testHDFSRecordTime100k() throws IOException {
         long FILE_SIZE = 1024 * 100; // bytes
         int WR_NTIMES = 30;
-        run_id = "/perf_run" + random.nextInt(10000);
-        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES);
+        String run_id = "/perf_run" + random.nextInt(10000);
+        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES, run_id);
     }
 
     //
@@ -101,8 +101,8 @@ public class S3PerformanceTest {
         long BLOCK_SIZE = 1024 * 100000; // bytes
         long BLOCK_SIZE_META = 800007; // bytes
         int WR_NTIMES = 30;
-        run_id = "/s3_perf_run" + random.nextInt(10000);
-        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES);
+        String run_id = "/s3_perf_run" + random.nextInt(10000);
+        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
     }
     
     @Test
@@ -110,9 +110,9 @@ public class S3PerformanceTest {
         long BLOCK_SIZE = 1024 * 10000; // bytes
         long BLOCK_SIZE_META = 80007; // bytes
         int WR_NTIMES = 30;
-        run_id = "/s3_perf_run" + random.nextInt(10000);
+        String run_id = "/s3_perf_run" + random.nextInt(10000);
 
-        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES);
+        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
     }
 
     @Test
@@ -120,9 +120,47 @@ public class S3PerformanceTest {
         long BLOCK_SIZE = 1024 * 1000; // bytes
         long BLOCK_SIZE_META = 80007; // bytes
         int WR_NTIMES = 1000;
-        run_id = "/s3_perf_run" + random.nextInt(10000);
+        String run_id = "/s3_perf_run" + random.nextInt(10000);
 
-        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES);
+        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
+    }
+
+    @Test
+    public void testS3RecordTime1MB_parallel_clients() throws IOException {
+        final int NUM_CLIENTS = 10;
+        class FakeClient implements Runnable {
+            long BLOCK_SIZE = 1024 * 1000; // bytes
+            long BLOCK_SIZE_META = 80007; // bytes
+            int WR_NTIMES = 1000 / NUM_CLIENTS ;
+            String run_id = "/s3_perf_run" + random.nextInt(1000000);
+            
+            public void run() {
+                try {
+                    testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        
+        // start all threads
+        ArrayList<Thread> threads = new ArrayList<Thread>(NUM_CLIENTS);
+        for (int i=0; i<10; i++) {
+            FakeClient client = new FakeClient();
+            Thread t = new Thread(client);
+            t.start();
+            threads.add(t);
+        }
+
+
+        // wait for them to finish
+        for (int i=0; i<10; i++) {
+            try {
+                threads.get(i).join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Test
@@ -130,15 +168,15 @@ public class S3PerformanceTest {
         long BLOCK_SIZE = 1024 * 100; // bytes
         long BLOCK_SIZE_META = 807; // bytes
         int WR_NTIMES = 30;
-        run_id = "/s3_perf_run" + random.nextInt(10000);
+        String run_id = "/s3_perf_run" + random.nextInt(10000);
 
-        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES);
+        testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
     }
     
     
     
     
-    private void testHDFS(long fileSize, long blocksize, int wr_ntimes) throws IOException {
+    private void testHDFS(long fileSize, long blocksize, int wr_ntimes, String run_id) throws IOException {
         Configuration conf = new HdfsConfiguration();
         conf.setBoolean("test.use_local_s3", use_local_s3);
         conf.setBoolean(DFSConfigKeys.S3_DATASET, use_hdfs_s3_dataset);
@@ -220,7 +258,7 @@ public class S3PerformanceTest {
         cluster.shutdown();
     }
     
-    private void testS3(long fileSize, long fileSizeMeta, int wr_ntimes) throws IOException {
+    private void testS3(long fileSize, long fileSizeMeta, int wr_ntimes, String run_id) throws IOException {
         Configuration conf = new HdfsConfiguration();
         conf.setBoolean(FAST_UPLOAD, use_fast_upload_s3a);
         
@@ -390,22 +428,22 @@ public class S3PerformanceTest {
                     // CLOSE BLOCK
                     Date start_close = new Date();
                     PutObjectRequest putReqBlock = new PutObjectRequest(bucket, fname.substring(1), local_block_file);
-//                    PutObjectResult putResult = s3client.putObject(putReqBlock);
-                    UploadInfo putUploadInfo = s3afs.putObject(putReqBlock);
+                    PutObjectResult putResult = s3afs.getS3Client().putObject(putReqBlock);
+//                    UploadInfo putUploadInfo = s3afs.putObject(putReqBlock);
                     
                     // close meta block
 //                    Date start_close_meta = new Date();
                     PutObjectRequest putReqMeta = new PutObjectRequest(bucket, fname_meta.substring(1), local_meta_file);
-//                    PutObjectResult putMetaResult = s3client.putObject(putReqMeta);
-                    UploadInfo putMetaUploadInfo = s3afs.putObject(putReqMeta);
+                    PutObjectResult putMetaResult = s3afs.getS3Client().putObject(putReqMeta);
+//                    UploadInfo putMetaUploadInfo = s3afs.putObject(putReqMeta);
                     
-                    try {
-                        putUploadInfo.getUpload().waitForUploadResult();
-                        putMetaUploadInfo.getUpload().waitForUploadResult();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                        LOG.error(e);
-                    }
+//                    try {
+//                        putUploadInfo.getUpload().waitForUploadResult();
+//                        putMetaUploadInfo.getUpload().waitForUploadResult();
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                        LOG.error(e);
+//                    }
                     long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
                     time_close += diffInMillies_close;
                     time_close_count++; // only do this once
