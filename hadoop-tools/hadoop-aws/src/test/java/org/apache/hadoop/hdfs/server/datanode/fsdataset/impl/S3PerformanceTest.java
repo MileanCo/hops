@@ -76,6 +76,14 @@ public class S3PerformanceTest {
     }
 
     @Test
+    public void testHDFSRecordTime1MB() throws IOException {
+        long FILE_SIZE = 1024 * 1000; // bytes
+        int WR_NTIMES = 30;
+        String run_id = "/perf_run" + random.nextInt(10000);
+        testHDFS(FILE_SIZE, FILE_SIZE, WR_NTIMES, run_id);
+    }
+
+    @Test
     public void testHDFSRecordTime10MB_multi_blocks() throws IOException {
         long FILE_SIZE = 512 * 10000; // bytes
         long BLOCK_SIZE = 1024 * 10000; // bytes
@@ -519,7 +527,8 @@ public class S3PerformanceTest {
                 LOG.info("Reading file " + fname);
                 Date start_read = new Date();
                 File dest1 = new File(local_block_file + ".downloaded");
-                FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname)).getWrappedStream(), dest1);
+                FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
+                    
 
                 // make sure file exists
                 if (! dest1.exists()) {
@@ -530,7 +539,7 @@ public class S3PerformanceTest {
 
                 if (is_s3) {
                     File dest2 = new File(local_meta_file + ".downloaded");
-                    FileUtils.copyInputStreamToFile(s3afs.open(new Path(fname_meta)).getWrappedStream(), dest2);
+                    FileUtils.copyInputStreamToFile(fs.open(new Path(fname_meta)).getWrappedStream(), dest2);
                     if (! dest2.exists()) {
                         Assert.fail("File " + dest2 + " failed to download");
                     }
