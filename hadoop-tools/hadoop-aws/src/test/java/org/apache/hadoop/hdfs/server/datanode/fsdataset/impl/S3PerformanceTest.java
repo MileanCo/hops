@@ -2,9 +2,7 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.S3ClientOptions;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.PutObjectResult;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -14,6 +12,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
+import org.apache.hadoop.fs.s3a.UploadInfo;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -127,7 +126,7 @@ public class S3PerformanceTest {
         long BLOCK_SIZE = 1048576; // bytes
         long BLOCK_SIZE_META = 8199; // bytes
         int WR_NTIMES = 1000;
-        String run_id = "/s3_perf_run" + random.nextInt(10000);
+        String run_id = "/s3_perf_run" + random.nextInt(100000);
 
         testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
     }
@@ -351,28 +350,28 @@ public class S3PerformanceTest {
                 time_create += (new Date()).getTime() - start_create2.getTime();
                 time_create_count++;
                 
-//                Date start_create = new Date();
-//                // WRite the file
-//                FSDataOutputStream out = fs.create(f);
-//                // counters
-//                long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
-//                time_create += diffInMillies_create;
-//                time_create_count++;
-//                LOG.info("=== Client create file: " + diffInMillies_create + " ms to create new file & return output handle");
-//
-//                Date start_write = new Date();
-//                writeData(out, outBuffer, (int) fileSize);
-//                long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
-//                time_write += diffInMillies_write;
-//                time_write_count++;
-//                LOG.info("=== Client write file: " + diffInMillies_write + " ms to write all data to file");
-//
-//                Date start_close = new Date();
-//                out.close();
-//                long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-//                time_close += diffInMillies_close;
-//                time_close_count++;
-//                LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
+                Date start_create = new Date();
+                // WRite the file
+                FSDataOutputStream out = fs.create(f);
+                // counters
+                long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
+                time_create += diffInMillies_create;
+                time_create_count++;
+                LOG.info("=== Client create file: " + diffInMillies_create + " ms to create new file & return output handle");
+
+                Date start_write = new Date();
+                writeData(out, outBuffer, (int) fileSize);
+                long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
+                time_write += diffInMillies_write;
+                time_write_count++;
+                LOG.info("=== Client write file: " + diffInMillies_write + " ms to write all data to file");
+
+                Date start_close = new Date();
+                out.close();
+                long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
+                time_close += diffInMillies_close;
+                time_close_count++;
+                LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
                 
                 if (do_append) {
                     Date start_append_create = new Date();    
@@ -394,25 +393,17 @@ public class S3PerformanceTest {
                 
                 if (is_s3) {
                     // simulate new block metadata...
-                    Date start_create = new Date();
+                    Date start_create_meta = new Date();
                     for (int j = 0; j < fileSizeMeta; j++) {
                         outMetaBuffer[j] = (byte) (j & 0x00fa);
                     }
                     // fake checking status of the file once
-                    try {
-                        // do this OR s3afs.contains
-                        s3afs.exists(new Path(fname));
+                    // do this OR s3afs.contains
+//                    s3afs.exists(new Path(fname));
 //                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
-                    } catch (AmazonS3Exception err) {
-                        LOG.info(err);
-                        if (! err.getMessage().contains("404 Not Found")) {
-                            throw err;
-                        }
-                    }
-                    long diffInMillies_create_file = (new Date()).getTime() - start_create.getTime();
+                    long diffInMillies_create_file = (new Date()).getTime() - start_create_meta.getTime();
                     time_create += diffInMillies_create_file;
-                    LOG.info(" Client create file: " + diffInMillies_create_file + " ms");
-
+                    LOG.info(" Client create meta file: " + diffInMillies_create_file + " ms");
 
 //                     WRITE new meta file
                     Date start_write_meta2 = new Date();
@@ -420,46 +411,46 @@ public class S3PerformanceTest {
                     FileUtils.writeByteArrayToFile(local_meta_file, outMetaBuffer);
                     long diffInMillies_write_meta2 = (new Date()).getTime() - start_write_meta2.getTime();
                     time_write += diffInMillies_write_meta2;
-                    LOG.info(" Client write file: " + diffInMillies_write_meta2 + " ms to create new file & return output handle");
+                    LOG.info(" Client write meta file: " + diffInMillies_write_meta2 + " ms to create new file & return output handle");
 
 //
                     // WRITE BLOCK FILE
                     // for local s3, we write otuput to file and then upload that file manually
-                    Date start_write = new Date();
-                    File local_block_file = new File("tmp" + fname);
-                    FileUtils.writeByteArrayToFile(local_block_file, outBuffer);
-                    long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
-                    time_write += diffInMillies_write;
-                    time_write_count++; // only once
-                    LOG.info(" Client write file: " + diffInMillies_write + " ms to write all data to file");
-                    
-
-                    // CLOSE BLOCK
-                    Date start_close = new Date();
-                    PutObjectRequest putReqBlock = new PutObjectRequest(bucket, fname.substring(1), local_block_file);
-                    PutObjectResult putResult = s3afs.getS3Client().putObject(putReqBlock);
-//                    UploadInfo putUploadInfo = s3afs.putObject(putReqBlock);
-                    
+//                    Date start_write = new Date();
+//                    File local_block_file = new File("tmp" + fname);
+//                    FileUtils.writeByteArrayToFile(local_block_file, outBuffer);
+//                    long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
+//                    time_write += diffInMillies_write;
+//                    time_write_count++; // only once
+//                    LOG.info(" Client write file: " + diffInMillies_write + " ms to write all data to file");
+//                    
+//
+//                    // CLOSE BLOCK
+//                    Date start_close = new Date();
+//                    PutObjectRequest putReqBlock = new PutObjectRequest(bucket, fname.substring(1), local_block_file);
+//                    PutObjectResult putResult = s3afs.getS3Client().putObject(putReqBlock);
+////                    UploadInfo putUploadInfo = s3afs.putObject(putReqBlock);
+//                    
                     // close meta block
-//                    Date start_close_meta = new Date();
+                    Date start_close_meta = new Date();
                     PutObjectRequest putReqMeta = new PutObjectRequest(bucket, fname_meta.substring(1), local_meta_file);
-                    PutObjectResult putMetaResult = s3afs.getS3Client().putObject(putReqMeta);
-//                    UploadInfo putMetaUploadInfo = s3afs.putObject(putReqMeta);
+//                    PutObjectResult putMetaResult = s3afs.getS3Client().putObject(putReqMeta);
+                    UploadInfo putMetaUploadInfo = s3afs.putObject(putReqMeta);
                     
-//                    try {
+                    try {
 //                        putUploadInfo.getUpload().waitForUploadResult();
-//                        putMetaUploadInfo.getUpload().waitForUploadResult();
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                        LOG.error(e);
-//                    }
-                    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-                    time_close += diffInMillies_close;
-                    time_close_count++; // only do this once
-                    LOG.info(" Client close file: " + diffInMillies_close + " ms to upload file to s3" );
+                        putMetaUploadInfo.getUpload().waitForUploadResult();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                        LOG.error(e);
+                    }
+                    long diffInMillies_close_meta = (new Date()).getTime() - start_close_meta.getTime();
+                    time_close += diffInMillies_close_meta;
+//                    time_close_count++; // only do this once
+                    LOG.info(" Client close meta file: " + diffInMillies_close_meta + " ms to upload file to s3" );
 
 
-                    local_block_file.delete();
+//                    local_block_file.delete();
                     local_meta_file.delete();
 
                     // reads this from S3 now
@@ -469,29 +460,29 @@ public class S3PerformanceTest {
                 
                     
                 } else {
-                    // HDFS runs
-                    Date start_create = new Date();
-                    // WRite the file
-                    FSDataOutputStream out = fs.create(f);
-                    // counters
-                    long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
-                    time_create += diffInMillies_create;
-                    time_create_count++;
-                    LOG.info("=== Client create file: " + diffInMillies_create + " ms to create new file & return output handle");
-
-                    Date start_write = new Date();
-                    writeData(out, outBuffer, (int) fileSize);
-                    long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
-                    time_write += diffInMillies_write;
-                    time_write_count++;
-                    LOG.info("=== Client write file: " + diffInMillies_write + " ms to write all data to file");
-
-                    Date start_close = new Date();
-                    out.close();
-                    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-                    time_close += diffInMillies_close;
-                    time_close_count++;
-                    LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
+//                    // HDFS runs
+//                    Date start_create = new Date();
+//                    // WRite the file
+//                    FSDataOutputStream out = fs.create(f);
+//                    // counters
+//                    long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
+//                    time_create += diffInMillies_create;
+//                    time_create_count++;
+//                    LOG.info("=== Client create file: " + diffInMillies_create + " ms to create new file & return output handle");
+//
+//                    Date start_write = new Date();
+//                    writeData(out, outBuffer, (int) fileSize);
+//                    long diffInMillies_write = (new Date()).getTime() - start_write.getTime();
+//                    time_write += diffInMillies_write;
+//                    time_write_count++;
+//                    LOG.info("=== Client write file: " + diffInMillies_write + " ms to write all data to file");
+//
+//                    Date start_close = new Date();
+//                    out.close();
+//                    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
+//                    time_close += diffInMillies_close;
+//                    time_close_count++;
+//                    LOG.info("=== Client close file: " + diffInMillies_close + " ms to upload file to s3" );
                     
 //                    // Read the file
 //                    Date start_read = new Date();
@@ -528,7 +519,7 @@ public class S3PerformanceTest {
                 Date start_read = new Date();
                 File dest1 = new File(local_block_file + ".downloaded");
                 FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
-                    
+                Assert.assertEquals(fileSize, dest1.length());
 
                 // make sure file exists
                 if (! dest1.exists()) {
@@ -543,19 +534,12 @@ public class S3PerformanceTest {
                     if (! dest2.exists()) {
                         Assert.fail("File " + dest2 + " failed to download");
                     }
+                    Assert.assertEquals(fileSizeMeta, dest2.length());
                     dest2.delete();
                 }
                 
                 time_read += (new Date()).getTime() - start_read.getTime();
                 time_read_count++;
-
-
-                // close meta block
-//                    Date start_close_meta = new Date();
-//                    PutObjectRequest putReqMeta = new PutObjectRequest(bucket, fname_meta.substring(1), local_meta_file);
-//                    s3client.putObject(putReqMeta);
-//                    time_close += (new Date()).getTime() - start_close_meta.getTime();
-//                    local_meta_file.delete();
                 
             } catch (IOException e) {
                 LOG.error(e);
