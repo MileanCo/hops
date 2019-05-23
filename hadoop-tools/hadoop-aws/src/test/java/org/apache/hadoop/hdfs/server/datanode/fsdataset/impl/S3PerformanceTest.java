@@ -476,6 +476,8 @@ public class S3PerformanceTest {
                     Date start_create = new Date();
                     // WRite the file
                     FSDataOutputStream out = fs.create(f);
+//                    FSDataOutputStream out2 = fs.create(f, (short) 1);
+
                     // counters
                     long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
                     time_create += diffInMillies_create;

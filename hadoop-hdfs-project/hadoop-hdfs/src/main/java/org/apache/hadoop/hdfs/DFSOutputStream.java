@@ -2605,7 +2605,7 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     completeFile(lastBlock);
     
     long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-    LOG.info("completeFile(): " + diffInMillies_close);
+    System.out.println("completeFile(): " + diffInMillies_close);
     
     closeThreads(false);
     dfsClient.endFileLease(fileId);
@@ -2692,7 +2692,7 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     }
     
     long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-    LOG.info("dfsClient.namenode.complete(): " + diffInMillies_close);
+    System.out.println("dfsClient.namenode.complete(): " + diffInMillies_close);
     
     return fileComplete;
   }
