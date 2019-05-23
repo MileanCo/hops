@@ -125,7 +125,7 @@ public class S3PerformanceTest {
     public void testS3RecordTime1MB() throws IOException {
         long BLOCK_SIZE = 1048576; // bytes
         long BLOCK_SIZE_META = 8199; // bytes   
-        int WR_NTIMES = 10;
+        int WR_NTIMES = 1000;
         String run_id = "/s3_perf_run" + random.nextInt(100000);
 
         testS3(BLOCK_SIZE, BLOCK_SIZE_META, WR_NTIMES, run_id);
@@ -215,10 +215,12 @@ public class S3PerformanceTest {
         System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
 
         // read captured stdout and count data
+        int dfs_create_time = 0;
         int createRBW_time = 0;
-        int start_receiveBlock_time = 0;
+        int receiveBlock_time = 0;
         int new_BlockReceiver_time = 0;
         int packet_responder_time = 0;
+        int finalizeBlk_time=0;
         int upload_time = 0;
         int delete_time = 0;
         int opWriteBlock = 0;
@@ -230,12 +232,16 @@ public class S3PerformanceTest {
             String[] parts = lines[i].split(" ");
             if (lines[i].contains("createRBW time")) {
                 createRBW_time += Integer.parseInt(parts[2]);
+            } else if (lines[i].contains("DFS.create")) {
+                dfs_create_time += Integer.parseInt(parts[1]);
             } else if (lines[i].contains("new_BlockReceiver")) {
                 new_BlockReceiver_time += Integer.parseInt(parts[1]);   
-            } else if (lines[i].contains("start_receiveBlock")) {
-                start_receiveBlock_time += Integer.parseInt(parts[1]);
+            } else if (lines[i].contains("receiveBlock_time")) {
+                receiveBlock_time += Integer.parseInt(parts[1]);
             } else if (lines[i].contains("packet_responder")) {
                 packet_responder_time += Integer.parseInt(parts[1]);
+            } else if (lines[i].contains("finalizeBlk_time")) {
+                finalizeBlk_time += Integer.parseInt(parts[1]);
             } else if (lines[i].contains("Upload")) {
                 upload_time += Integer.parseInt(parts[3]);
             } else if (lines[i].contains("Delete")) {
@@ -248,9 +254,11 @@ public class S3PerformanceTest {
         }
 
         LOG.info("------------\n");
+        LOG.info("dfs_create_time: " + dfs_create_time);
         LOG.info("new_BlockReceiver time: " + new_BlockReceiver_time + " (createRBW time: " + createRBW_time + ")" );
-        LOG.info("start_receiveBlock time: " + start_receiveBlock_time);
+        LOG.info("receiveBlock_time : " + receiveBlock_time);
         LOG.info("packet_responder_time: " + packet_responder_time);
+        LOG.info("finalizeBlk_time: " + finalizeBlk_time);
         LOG.info("Upload time: " + upload_time);
         LOG.info("S3Finalized.delete time: " + delete_time);
         LOG.info("opWriteBlock time: " + opWriteBlock);
@@ -347,8 +355,8 @@ public class S3PerformanceTest {
                 for (int j = 0; j < fileSize; j++) {
                     outBuffer[j] = (byte) (j & 0x00ff);
                 }
-                time_create += (new Date()).getTime() - start_create2.getTime();
-                time_create_count++;
+//                time_create += (new Date()).getTime() - start_create2.getTime();
+//                time_create_count++;
                 
 //                Date start_create = new Date();
 //                // WRite the file

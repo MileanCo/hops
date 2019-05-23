@@ -578,6 +578,8 @@ class BlockReceiver implements Closeable {
 
       byte[] lastChunkChecksum;
       
+//      Date start_write_data_to_disk = new Date();
+      
       try {
         long onDiskLen = replicaInfo.getBytesOnDisk();
         if (onDiskLen < offsetInBlock) {
@@ -606,6 +608,7 @@ class BlockReceiver implements Closeable {
 
           int numBytesToDisk = (int) (offsetInBlock - onDiskLen);
           
+          
           // Write data to disk.
           long begin = Time.monotonicNow();
           out.write(dataBuf.array(), startByteToDisk, numBytesToDisk);
@@ -614,6 +617,9 @@ class BlockReceiver implements Closeable {
             LOG.warn("Slow BlockReceiver write data to disk cost:" + duration
                 + "ms (threshold=" + datanodeSlowLogThresholdMs + "ms)");
           }
+
+//          long diffInMillies = (new Date()).getTime() - start_write_data_to_disk.getTime();
+//          System.out.println("write_data_to_disk: " + diffInMillies);
 
           // If this is a partial chunk, then verify that this is the only
           // chunk in the packet. Calculate new crc for this chunk.
@@ -772,7 +778,12 @@ class BlockReceiver implements Closeable {
             new PacketResponder(replyOut, mirrIn, downstreams));
         responder.start(); // start thread to processes responses
       }
+      Date start_packet_responder = new Date();
+      
       while (receivePacket() >= 0) { /* Receive until the last packet */ }
+
+      long diffInMillies = (new Date()).getTime() - start_packet_responder.getTime();
+      System.out.println("packet_responder_time: " + diffInMillies);
 
       // wait for all outstanding packet responses. And then
       // indicate responder to gracefully shutdown.
@@ -795,13 +806,8 @@ class BlockReceiver implements Closeable {
           datanode.data.convertTemporaryToRbw(block);
         } else {
           // for isDatnode or TRANSFER_FINALIZED
-          // Finalize the block.
-          Date finalize_blk_time = new Date();
-          
+          // Finalize the block.;
           datanode.data.finalizeBlock(block);
-          
-          long diffInMillies_finalize = (new Date()).getTime() - finalize_blk_time.getTime();
-          System.out.println("finalize_blk_time " + diffInMillies_finalize);
         }
         datanode.metrics.incrBlocksWritten();
       }
@@ -1158,7 +1164,6 @@ class BlockReceiver implements Closeable {
       boolean lastPacketInBlock = false;
       final long startTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime() : 0;
       
-      Date start_packet_responder = new Date();
       while (isRunning() && !lastPacketInBlock) {
 
         long totalAckTimeNanos = 0;
@@ -1251,13 +1256,15 @@ class BlockReceiver implements Closeable {
             continue;
           }
           if (lastPacketInBlock) {
-            
-            long diffInMillies = (new Date()).getTime() - start_packet_responder.getTime();
-            System.out.println("packet_responder: " + diffInMillies);
-            
             // Finalize the block and close the block file
             try {
+              Date finalizeBlk_start = new Date();
+              
               finalizeBlock(startTime);
+
+              long diffInMillies = (new Date()).getTime() - finalizeBlk_start.getTime();
+              System.out.println("finalizeBlk_time: " + diffInMillies);
+              
             } catch (ReplicaNotFoundException e) {
               // Verify that the exception is due to volume removal.
               FsVolumeSpi volume;

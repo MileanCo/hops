@@ -732,7 +732,6 @@ class DataXceiver extends Receiver implements Runnable {
 
       // receive the block and mirror to the next target
       Date start_receiveBlock = new Date();
-      System.out.println("... Starting to collect start__receiveBlock");
       
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
@@ -749,7 +748,7 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       long diffInMillies = (new Date()).getTime() - start_receiveBlock.getTime();
-      System.out.println("start_receiveBlock: " + diffInMillies);
+      System.out.println("receiveBlock_time: " + diffInMillies);
 
       // update its generation stamp
       if (isClient && stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
