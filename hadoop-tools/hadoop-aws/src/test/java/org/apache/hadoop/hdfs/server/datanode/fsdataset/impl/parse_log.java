@@ -1,4 +1,4 @@
-//package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
+package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
