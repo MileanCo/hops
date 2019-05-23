@@ -136,7 +136,7 @@ public class S3PerformanceTest {
 
     @Test
     public void testS3RecordTime1MB_parallel_clients() throws IOException {
-        final int NUM_CLIENTS = 10;
+        final int NUM_CLIENTS = 20;
         class FakeClient implements Runnable {
             long BLOCK_SIZE = 1048576; // bytes
             long BLOCK_SIZE_META = 8199; // bytes
@@ -368,7 +368,6 @@ public class S3PerformanceTest {
             Path f = new Path(fname);
             try {
                 // simulate new block data
-                Date start_create2 = new Date();
                 for (int j = 0; j < fileSize; j++) {
                     outBuffer[j] = (byte) (j & 0x00ff);
                 }
@@ -424,10 +423,14 @@ public class S3PerformanceTest {
                     }
                     // fake checking status of the file once
                     // do this OR s3afs.contains
-                    s3afs.exists(new Path(fname));
+                    // fake synchronized GET (DN does this).
+//                    synchronized (this ) {
+//                        s3afs.exists(new Path(fname));
+//                    }
 //                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
                     long diffInMillies_create_file = (new Date()).getTime() - start_create_meta.getTime();
                     time_create += diffInMillies_create_file;
+                    time_create_count++;
                     LOG.info(" Client create meta file: " + diffInMillies_create_file + " ms");
 
 //                     WRITE new meta file
@@ -466,6 +469,7 @@ public class S3PerformanceTest {
                     
                     local_block_file.delete();
                     local_meta_file.delete();
+                    
 
                     // reads this from S3 now
 //                        readData(fname, inBuffer, outBuffer.length, 0, fs, blockSize);
@@ -476,6 +480,8 @@ public class S3PerformanceTest {
                     Date start_create = new Date();
                     // WRite the file
                     FSDataOutputStream out = fs.create(f);
+//                    FSDataOutputStream out2 = fs.create(f, (short) 1);
+
                     // counters
                     long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
                     time_create += diffInMillies_create;
@@ -529,6 +535,16 @@ public class S3PerformanceTest {
 
                 LOG.info("Reading file " + fname);
                 Date start_read = new Date();
+                
+                if (is_s3) {
+                    // fake checking status of the file once, since DN does this
+                    // do this OR s3afs.contains
+                    // fake synchronized GET (DN does this).
+//                    synchronized (this ) {
+//                        s3afs.getFileStatus(new Path(fname));    
+//                    }
+                }
+                
                 File dest1 = new File(local_block_file + ".downloaded");
                 FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
                 Assert.assertEquals(fileSize, dest1.length());

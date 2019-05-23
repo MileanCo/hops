@@ -178,13 +178,18 @@ class BlockReceiver implements Closeable {
       } else {
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
-            Date date_rbw = new Date();
+            Date date_rbw = new Date(); 
             
             replicaInfo = datanode.data.createRbw(storageType, block);
-            datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
-            
             long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
             LOG.info("createRBW time: " + diffInMillies);
+            
+            
+            Date date_notifyNN = new Date();
+            datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
+            
+            long diffInMillies2 = (new Date()).getTime() - date_notifyNN.getTime();
+            LOG.info("notifyNamenodeCreatingBlock time: " + diffInMillies2);
             
             break;
           case PIPELINE_SETUP_STREAMING_RECOVERY:
@@ -1321,11 +1326,15 @@ class BlockReceiver implements Closeable {
      * @param startTime time when BlockReceiver started receiving the block
      */
     private void finalizeBlock(long startTime) throws IOException {
+      
       BlockReceiver.this.close();
+      
       final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
           : 0;
       block.setNumBytes(replicaInfo.getNumBytes());
+      
       datanode.data.finalizeBlock(block);
+      
       datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
       if (ClientTraceLog.isInfoEnabled() && isClient) {
         long offset = 0;

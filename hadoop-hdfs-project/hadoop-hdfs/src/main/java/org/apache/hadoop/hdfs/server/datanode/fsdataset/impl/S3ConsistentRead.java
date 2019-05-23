@@ -1,11 +1,13 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
-import org.apache.hadoop.fs.FSDataInputStream;
+import com.amazonaws.services.s3.model.S3Object;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -86,17 +88,25 @@ public class S3ConsistentRead {
     }
 
 
-    public InputStream getS3BlockMetaInputStream(ExtendedBlock b) {
+    public LengthInputStream getS3BlockMetaInputStream(ExtendedBlock b, long seekOffset) {
         String block_meta_aws_key_str = S3DatasetImpl.getMetaKey(b.getBlockPoolId(), b.getBlockId(), b.getGenerationStamp());
         Path block_meta_aws_key = new Path(block_meta_aws_key_str);
         LOG.info("Getting meta " + s3dataset.getBucket() + ":" + block_meta_aws_key);
         try {
-//            s3dataset.getS3AFileSystem().getObjectMetadata(block_meta_aws_key);
-            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
-            return in.getWrappedStream();
-        } catch (IOException err) {
-            // S3Guard exceptions appear here
-            throw new CustomRuntimeException(err.getMessage());
+            // TODO: call this with num_bytes of meta block file so that we avoid RR to S3
+//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
+//            return in.getWrappedStream();
+//            
+            GetObjectRequest metaObjReq = new GetObjectRequest(s3dataset.getBucket(), block_meta_aws_key_str);
+            if (seekOffset > 0) {
+                metaObjReq.setRange(seekOffset);
+            }
+            S3Object meta_s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(metaObjReq);
+            return new LengthInputStream(meta_s3_obj.getObjectContent(), meta_s3_obj.getObjectMetadata().getContentLength());
+            
+//        } catch (IOException err) {
+//            // S3Guard exceptions appear here
+//            throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
             LOG.error(block_meta_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
@@ -105,7 +115,7 @@ public class S3ConsistentRead {
         }
 
         if (doesBlockExist(b.getBlockPoolId(), b.getBlockId())) {
-            return getS3BlockMetaInputStream(b);
+            return getS3BlockMetaInputStream(b, seekOffset);
         } else {
             return null;
         }
@@ -119,13 +129,24 @@ public class S3ConsistentRead {
         LOG.info("Getting block " + s3dataset.getBucket() + ":" + block_aws_key + " with seekOffset " + seekOffset);
 
         try {
-            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key);
-            in.seek(seekOffset);
-            return in.getWrappedStream();
+            // use the new custom open method that skips doing a fileStatus check
+//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key, b.getNumBytes());
+//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key);
+//            if (seekOffset > 0) {
+//                in.seek(seekOffset);
+//            }
+//            return in.getWrappedStream();
 
-        } catch (IOException err) {
-            // S3Guard exceptions appear here
-            throw new CustomRuntimeException(err.getMessage());
+            GetObjectRequest objReq = new GetObjectRequest(s3dataset.getBucket(), block_aws_key_str);
+            if (seekOffset > 0) {
+                objReq.setRange(seekOffset);
+            }
+            S3Object s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(objReq);
+            return s3_obj.getObjectContent();
+
+//        } catch (IOException err) {
+//            // S3Guard exceptions appear here
+//            throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
             LOG.error(block_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {

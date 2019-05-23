@@ -4,6 +4,10 @@ import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 
+import java.util.Date;
+
+import static org.apache.hadoop.hdfs.protocol.DatanodeInfo.LOG;
+
 public class S3ReplicaMap extends ReplicaMap {
     
     private S3DatasetImpl s3Dataset;
@@ -27,6 +31,8 @@ public class S3ReplicaMap extends ReplicaMap {
      */
     @Override
     ReplicaInfo get(String bpid, Block block) {
+        Date start_get_fins3 = new Date();
+        
         // first get from volume map like normally
         ReplicaInfo replicaInfo = super.get(bpid, block.getBlockId());
         // check S3 if replicainfo is null
@@ -35,6 +41,9 @@ public class S3ReplicaMap extends ReplicaMap {
             ExtendedBlock b = new ExtendedBlock(bpid, block);
             replicaInfo = s3Dataset.getS3FinalizedReplica(b);
         }
+        long diffInMillies = (new Date()).getTime() - start_get_fins3.getTime();
+        LOG.info("get_s3_finalized_blk: " + diffInMillies);
+        
         // check gen stamp and return
         if (replicaInfo != null && block.getGenerationStamp() == replicaInfo.getGenerationStamp()) {
             return replicaInfo;
