@@ -625,7 +625,7 @@ class DataXceiver extends Receiver implements Runnable {
                 latestGenerationStamp, minBytesRcvd, maxBytesRcvd, clientname,
                 srcDataNode, datanode, requestedChecksum, cachingStrategy);
         
-        System.out.println("new_BlockReceiver: " + ((new Date()).getTime() - start_recv.getTime()));
+        LOG.info("new_BlockReceiver: " + ((new Date()).getTime() - start_recv.getTime()));
         
         storageUuid = blockReceiver.getStorageUuid();
       } else {  
@@ -748,7 +748,7 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       long diffInMillies = (new Date()).getTime() - start_receiveBlock.getTime();
-      System.out.println("receiveBlock_time: " + diffInMillies);
+      LOG.info("receiveBlock_time: " + diffInMillies);
 
       // update its generation stamp
       if (isClient && stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {

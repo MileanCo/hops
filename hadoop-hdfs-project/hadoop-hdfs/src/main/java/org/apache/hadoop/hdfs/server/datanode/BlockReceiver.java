@@ -184,7 +184,7 @@ class BlockReceiver implements Closeable {
             datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
             
             long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
-            System.out.println("createRBW time: " + diffInMillies);
+            LOG.info("createRBW time: " + diffInMillies);
             
             break;
           case PIPELINE_SETUP_STREAMING_RECOVERY:
@@ -783,7 +783,7 @@ class BlockReceiver implements Closeable {
       while (receivePacket() >= 0) { /* Receive until the last packet */ }
 
       long diffInMillies = (new Date()).getTime() - start_packet_responder.getTime();
-      System.out.println("packet_responder_time: " + diffInMillies);
+      LOG.info("packet_responder_time: " + diffInMillies);
 
       // wait for all outstanding packet responses. And then
       // indicate responder to gracefully shutdown.
@@ -1263,7 +1263,7 @@ class BlockReceiver implements Closeable {
               finalizeBlock(startTime);
 
               long diffInMillies = (new Date()).getTime() - finalizeBlk_start.getTime();
-              System.out.println("finalizeBlk_time: " + diffInMillies);
+              LOG.info("finalizeBlk_time: " + diffInMillies);
               
             } catch (ReplicaNotFoundException e) {
               // Verify that the exception is due to volume removal.

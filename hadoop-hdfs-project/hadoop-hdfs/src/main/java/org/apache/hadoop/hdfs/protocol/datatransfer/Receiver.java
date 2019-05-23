@@ -100,7 +100,7 @@ public abstract class Receiver implements DataTransferProtocol {
         Date start_d = new Date();
         opWriteBlock(in);
         long diffInMillies = (new Date()).getTime() - start_d.getTime();
-        System.out.println("opWriteblock= " + diffInMillies + " ms");
+        LOG.info("opWriteblock= " + diffInMillies + " ms");
         break;
       case REPLACE_BLOCK:
         opReplaceBlock(in);
@@ -167,7 +167,6 @@ public abstract class Receiver implements DataTransferProtocol {
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
     try {
-      Date write_block_time = new Date();
       writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
           PBHelper.convertStorageType(proto.getStorageType()),
           PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
@@ -183,10 +182,6 @@ public abstract class Receiver implements DataTransferProtocol {
           (proto.hasCachingStrategy() ?
               getCachingStrategy(proto.getCachingStrategy()) :
             CachingStrategy.newDefaultStrategy()));
-
-      System.out.println("write_block_time: " + ((new Date()).getTime() - write_block_time.getTime()));
-      
-      
      } finally {
       if (traceScope != null) traceScope.close();
      }

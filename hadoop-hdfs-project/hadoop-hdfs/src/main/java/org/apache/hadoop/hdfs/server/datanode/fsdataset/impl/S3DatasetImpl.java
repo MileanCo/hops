@@ -297,7 +297,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
         finalizeReplica(b.getBlockPoolId(), replicaInfo);
         
         long diffInMillies_upload = (new Date()).getTime() - start_time_upload.getTime();
-        System.out.println("=== Upload block " + diffInMillies_upload + " ms ");
+        LOG.info("=== Upload block " + diffInMillies_upload + " ms ");
 
         // TODO: performance improvement... defer delete until later? 
         // just delete older block even if it's not there
@@ -312,7 +312,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
             LOG.info("Deleted old finalized block " + old_b + " for append.");
         }
         long diffInMillies_delete = (new Date()).getTime() - start_del_time.getTime();
-        System.out.println("=== Delete prev block time - " + diffInMillies_delete + " ms for append safety.");
+        LOG.info("=== Delete prev block time - " + diffInMillies_delete + " ms for append safety.");
     }
     
     /**

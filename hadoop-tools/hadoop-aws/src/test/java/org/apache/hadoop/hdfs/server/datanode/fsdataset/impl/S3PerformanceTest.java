@@ -22,6 +22,9 @@ import org.junit.Test;
 
 import java.io.*;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Random;
@@ -180,6 +183,72 @@ public class S3PerformanceTest {
     }
     
     
+    public void parse_log_file(long total_time, String out) {
+        // read captured stdout and count data
+        int dfs_create_time = 0;
+        int createRBW_time = 0;
+        int receiveBlock_time = 0;
+        int new_BlockReceiver_time = 0;
+        int packet_responder_time = 0;
+        int finalizeBlk_time=0;
+        int upload_time = 0;
+        int delete_time = 0;
+        int opWriteBlock = 0;
+        int completeFile_time = 0;
+        
+        String[] lines = out.split("\n");
+        for (int i=0; i<lines.length;i++) {
+            String[] parts = lines[i].split(" ");
+            if (lines[i].contains("createRBW time")) {
+                createRBW_time += Integer.parseInt(parts[2]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("DFS.create")) {
+                dfs_create_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("new_BlockReceiver")) {
+                new_BlockReceiver_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("receiveBlock_time")) {
+                receiveBlock_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("packet_responder")) {
+                packet_responder_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("finalizeBlk_time")) {
+                finalizeBlk_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("Upload")) {
+                upload_time += Integer.parseInt(parts[3]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("Delete")) {
+                delete_time += Integer.parseInt(parts[6]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("opWriteblock")) {
+                opWriteBlock += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            } else if (lines[i].contains("completeFile")) {
+                completeFile_time += Integer.parseInt(parts[1]);
+                LOG.info(lines[i]);
+            }
+        }
+
+        LOG.info("------------\n");
+        LOG.info("dfs_create_time: " + dfs_create_time);
+        LOG.info("new_BlockReceiver time: " + new_BlockReceiver_time + " (createRBW time: " + createRBW_time + ")" );
+        LOG.info("receiveBlock_time : " + receiveBlock_time);
+        LOG.info("packet_responder_time: " + packet_responder_time);
+        LOG.info("finalizeBlk_time: " + finalizeBlk_time);
+        LOG.info("Upload time: " + upload_time);
+        LOG.info("S3Finalized.delete time: " + delete_time);
+        LOG.info("opWriteBlock time: " + opWriteBlock);
+        LOG.info("completeFile_time time: " + completeFile_time);
+
+        double diffInSec = total_time / 1000.0;
+        LOG.info("-----------------------\n" +
+                "It took " + diffInSec + " seconds to write" +
+                "\n---------------------------\n\n\n");
+    }
+    
     
     
     private void testHDFS(long fileSize, long blocksize, int wr_ntimes, String run_id) throws IOException {
@@ -213,61 +282,9 @@ public class S3PerformanceTest {
         long total_time = testWriteRead(mfs, run_id, false, fileSize, 0, wr_ntimes);
         
         System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
-
-        // read captured stdout and count data
-        int dfs_create_time = 0;
-        int createRBW_time = 0;
-        int receiveBlock_time = 0;
-        int new_BlockReceiver_time = 0;
-        int packet_responder_time = 0;
-        int finalizeBlk_time=0;
-        int upload_time = 0;
-        int delete_time = 0;
-        int opWriteBlock = 0;
-        int completeFile_time = 0;
-        String out = baos.toString();
-        String[] lines = out.split("\n");
-        for (int i=0; i<lines.length;i++) {
-            LOG.info(lines[i]);
-            String[] parts = lines[i].split(" ");
-            if (lines[i].contains("createRBW time")) {
-                createRBW_time += Integer.parseInt(parts[2]);
-            } else if (lines[i].contains("DFS.create")) {
-                dfs_create_time += Integer.parseInt(parts[1]);
-            } else if (lines[i].contains("new_BlockReceiver")) {
-                new_BlockReceiver_time += Integer.parseInt(parts[1]);   
-            } else if (lines[i].contains("receiveBlock_time")) {
-                receiveBlock_time += Integer.parseInt(parts[1]);
-            } else if (lines[i].contains("packet_responder")) {
-                packet_responder_time += Integer.parseInt(parts[1]);
-            } else if (lines[i].contains("finalizeBlk_time")) {
-                finalizeBlk_time += Integer.parseInt(parts[1]);
-            } else if (lines[i].contains("Upload")) {
-                upload_time += Integer.parseInt(parts[3]);
-            } else if (lines[i].contains("Delete")) {
-                delete_time += Integer.parseInt(parts[6]);
-            } else if (lines[i].contains("opWriteblock")) {
-                opWriteBlock += Integer.parseInt(parts[1]);
-            } else if (lines[i].contains("completeFile")) {
-                completeFile_time += Integer.parseInt(parts[1]);
-            }
-        }
-
-        LOG.info("------------\n");
-        LOG.info("dfs_create_time: " + dfs_create_time);
-        LOG.info("new_BlockReceiver time: " + new_BlockReceiver_time + " (createRBW time: " + createRBW_time + ")" );
-        LOG.info("receiveBlock_time : " + receiveBlock_time);
-        LOG.info("packet_responder_time: " + packet_responder_time);
-        LOG.info("finalizeBlk_time: " + finalizeBlk_time);
-        LOG.info("Upload time: " + upload_time);
-        LOG.info("S3Finalized.delete time: " + delete_time);
-        LOG.info("opWriteBlock time: " + opWriteBlock);
-        LOG.info("completeFile_time time: " + completeFile_time);
         
-        double diffInSec = total_time / 1000.0;
-        LOG.info("-----------------------\n" +
-                "It took " + diffInSec + " seconds to write " + wr_ntimes + " files with size " + fileSize +
-                "\n---------------------------\n\n\n");
+        String out = baos.toString();
+        parse_log_file(total_time, out);
         
         cluster.shutdown();
     }
@@ -712,17 +729,22 @@ public class S3PerformanceTest {
 
 
     /**
-     * 
+     * If run as normal script,  
      */
-//    public static void main(String[] args) {
-//        try {
-//            S3PerformanceTest test = new S3PerformanceTest();
-//
-//            System.exit(0);
-//        } catch (IOException e) {
-////            LOG.info("#### Exception in Main");
-//            e.printStackTrace();
-//            System.exit(-2);
-//        }
-//    }
+    public static void main(String[] args) {
+        try {
+            S3PerformanceTest test = new S3PerformanceTest();
+            
+            String file_path = args[0];
+            
+            String log_file_str = new String(Files.readAllBytes(Paths.get(file_path)), StandardCharsets.UTF_8);
+            
+            test.parse_log_file(0, log_file_str);
+            System.exit(0);
+        } catch (IOException e) {
+//            LOG.info("#### Exception in Main");
+            e.printStackTrace();
+            System.exit(-2);
+        }
+    }
 }
