@@ -897,7 +897,7 @@ public abstract class FileSystem extends Configured implements Closeable {
             replication, blockSize, progress);
 
     long diffInMillies_create = (new Date()).getTime() - start_create.getTime();
-    LOG.info("DFS.create: " + diffInMillies_create);
+    System.out.println("DFS.create: " + diffInMillies_create);
     
     return ret;
   }
