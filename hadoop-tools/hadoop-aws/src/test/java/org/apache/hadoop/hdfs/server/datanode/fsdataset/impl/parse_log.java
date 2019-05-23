@@ -19,39 +19,42 @@ public class parse_log {
         int opWriteBlock = 0;
         int completeFile_time = 0;
 
+
+        //2019-05-23 09:54:31,752 INFO org.apache.hadoop.hdfs.server.datanode.DataNode: finalizeBlk_time: 192
+
         String[] lines = out.split("\n");
         for (int i=0; i<lines.length;i++) {
             String[] parts = lines[i].split(" ");
             if (lines[i].contains("createRBW time")) {
-                createRBW_time += Integer.parseInt(parts[2]);
+                createRBW_time += Integer.parseInt(parts[6]);
                 System.out.println(lines[i]);
             } else if (lines[i].contains("DFS.create")) {
-                dfs_create_time += Integer.parseInt(parts[1]);
+                dfs_create_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
             } else if (lines[i].contains("new_BlockReceiver")) {
-                new_BlockReceiver_time += Integer.parseInt(parts[1]);
+                new_BlockReceiver_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
             } else if (lines[i].contains("receiveBlock_time")) {
-                receiveBlock_time += Integer.parseInt(parts[1]);
+                receiveBlock_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
             } else if (lines[i].contains("packet_responder")) {
-                packet_responder_time += Integer.parseInt(parts[1]);
+                packet_responder_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
             } else if (lines[i].contains("finalizeBlk_time")) {
-                finalizeBlk_time += Integer.parseInt(parts[1]);
+                finalizeBlk_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
-            } else if (lines[i].contains("Upload")) {
-                upload_time += Integer.parseInt(parts[3]);
+            } else if (lines[i].contains("=== Upload")) {
                 System.out.println(lines[i]);
-            } else if (lines[i].contains("Delete")) {
-                delete_time += Integer.parseInt(parts[6]);
+                upload_time += Integer.parseInt(parts[7]);
+            } else if (lines[i].contains("=== Delete")) {
                 System.out.println(lines[i]);
-            } else if (lines[i].contains("opWriteblock")) {
-                opWriteBlock += Integer.parseInt(parts[1]);
+                delete_time += Integer.parseInt(parts[10]);
+            } else if (lines[i].contains("opWriteblock=")) {
                 System.out.println(lines[i]);
-            } else if (lines[i].contains("completeFile")) {
-                completeFile_time += Integer.parseInt(parts[1]);
+                opWriteBlock += Integer.parseInt(parts[5]);
+            } else if (lines[i].contains("completeFile():")) {
                 System.out.println(lines[i]);
+                completeFile_time += Integer.parseInt(parts[5]);
             }
         }
 
@@ -71,7 +74,7 @@ public class parse_log {
                 "It took " + diffInSec + " seconds to write" +
                 "\n---------------------------\n\n\n");
     }
-    
+
     public static void main(String[] args) {
         try {
             String file_path = args[0];
@@ -87,5 +90,3 @@ public class parse_log {
         }
     }
 }
-
-    
