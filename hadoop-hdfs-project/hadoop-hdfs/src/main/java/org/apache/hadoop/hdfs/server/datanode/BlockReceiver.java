@@ -178,13 +178,7 @@ class BlockReceiver implements Closeable {
       } else {
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
-            Date date_rbw = new Date();
-            
             replicaInfo = datanode.data.createRbw(storageType, block);
-            
-            long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
-            LOG.info("createRBW time: " + diffInMillies);
-            
             
             Date date_notifyNN = new Date();
             datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
@@ -1333,13 +1327,8 @@ class BlockReceiver implements Closeable {
       final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
           : 0;
       block.setNumBytes(replicaInfo.getNumBytes());
-
-      Date start_close_blk = new Date();
-      datanode.data.finalizeBlock(block);
       
-      long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
-      LOG.info("finalize_close_blk_time: " + diffInMillies);
-
+      datanode.data.finalizeBlock(block);
       
       datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
       if (ClientTraceLog.isInfoEnabled() && isClient) {

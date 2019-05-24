@@ -9,6 +9,7 @@ import org.apache.hadoop.fs.s3a.S3AFileSystemCommon;
 import org.apache.hadoop.fs.s3a.UploadInfo;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
+import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -80,27 +81,33 @@ public class S3DatasetImpl extends FsDatasetImpl {
         //namenode = datanode.getActiveNamenodeForBP();
     }
 
-//    @Override // FsDatasetSpi
-//    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
-//                                                    ExtendedBlock b) throws IOException {
-//        // checks local filesystem and S3 for the block
-//        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
-//        if (replicaInfo != null) {
-//            throw new ReplicaAlreadyExistsException("Block " + b +
-//                    " already exists in state " + replicaInfo.getState() +
-//                    " and thus cannot be created.");
-//        }
-//        
-//        // create a new block
-//        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
-//
-//        // create an rbw file to hold block in the designated volume
-//        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
-//        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
-//                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
-//        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);        
-//        return newReplicaInfo;
-//    }
+    @Override // FsDatasetSpi
+    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
+                                                    ExtendedBlock b) throws IOException {
+        Date date_rbw = new Date();
+        
+        // checks local filesystem and S3 for the block
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
+        if (replicaInfo != null) {
+            throw new ReplicaAlreadyExistsException("Block " + b +
+                    " already exists in state " + replicaInfo.getState() +
+                    " and thus cannot be created.");
+        }
+
+        // create a new block
+        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
+
+        // create an rbw file to hold block in the designated volume
+        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
+                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
+        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
+        
+        long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
+        LOG.info("createRBW time: " + diffInMillies);
+        
+        return newReplicaInfo;
+    }
     
     public void downloadS3BlockTo(ExtendedBlock b, File dest) throws IOException {
         // TODO: check cache if block exists locally?
@@ -287,6 +294,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
      */
     @Override // FsDatasetSpi
     public synchronized void finalizeBlock(ExtendedBlock b) throws IOException {
+        Date start_close_blk = new Date();
+        
         if (Thread.interrupted()) {
             // Don't allow data modifications from interrupted threads
             throw new IOException("Cannot finalize block from Interrupted Thread");
@@ -318,6 +327,9 @@ public class S3DatasetImpl extends FsDatasetImpl {
         }
         long diffInMillies_delete = (new Date()).getTime() - start_del_time.getTime();
         LOG.info("=== Delete prev block time - " + diffInMillies_delete + " ms for append safety.");
+
+        long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
+        LOG.info("finalize_close_blk_time: " + diffInMillies);
     }
     
     /**
