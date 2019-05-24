@@ -293,9 +293,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
      * Complete the block write!
      */
     @Override // FsDatasetSpi
-    public synchronized void finalizeBlock(ExtendedBlock b) throws IOException {
-        Date start_close_blk = new Date();
-        
+    public void finalizeBlock(ExtendedBlock b) throws IOException {
         if (Thread.interrupted()) {
             // Don't allow data modifications from interrupted threads
             throw new IOException("Cannot finalize block from Interrupted Thread");
@@ -309,10 +307,11 @@ public class S3DatasetImpl extends FsDatasetImpl {
             return;
         }
         finalizeReplica(b.getBlockPoolId(), replicaInfo);
-        
+
         long diffInMillies_upload = (new Date()).getTime() - start_time_upload.getTime();
         LOG.info("=== Upload block " + diffInMillies_upload + " ms ");
-
+        
+        
         // TODO: performance improvement... defer delete until later? 
         // just delete older block even if it's not there
         Date start_del_time = new Date();
@@ -327,38 +326,32 @@ public class S3DatasetImpl extends FsDatasetImpl {
         }
         long diffInMillies_delete = (new Date()).getTime() - start_del_time.getTime();
         LOG.info("=== Delete prev block time - " + diffInMillies_delete + " ms for append safety.");
-
-        long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
-        LOG.info("finalize_close_blk_time: " + diffInMillies);
+        
     }
     
     /**
-     * Complete the block write!
+     * Upload file to S3 and update volumeMap (replica map)
+     * Override method from FsDatasetImpl to support recovery
      */
     // TODO: is synchronized still needed for s3?
-    private synchronized S3FinalizedReplica finalizeReplica(String bpid, ReplicaInfo replicaInfo) throws IOException {
+    @Override
+    protected S3FinalizedReplica finalizeReplica (String bpid, ReplicaInfo replicaInfo) throws IOException {
         File local_block_file = replicaInfo.getBlockFile();
-        File local_meta_file = replicaInfo.getMetaFile(); //FsDatasetUtil.getMetaFile(local_block_file, replicaInfo.getGenerationStamp());
+        File local_meta_file = replicaInfo.getMetaFile();
         
         // Upload a text string as a new object.
         String s3_block_key = getBlockKey(bpid, replicaInfo.getBlockId(), replicaInfo.getGenerationStamp());
         String s3_block_meta_key = getMetaKey(bpid, replicaInfo.getBlockId(), replicaInfo.getGenerationStamp());
 
-
         // Upload a file as a new object with ContentType and title specified.
         PutObjectRequest putReqBlock = new PutObjectRequest(bucket, s3_block_key, local_block_file);
-//        ObjectMetadata blockMetadata = new ObjectMetadata();
-//        blockMetadata.addUserMetadata("generationstamp", String.valueOf(replicaInfo.getGenerationStamp()));
-//        putReqBlock.setMetadata(blockMetadata);
         LOG.info("Uploading block file " + s3_block_key);
         UploadInfo uploadBlock = s3afs.putObject(putReqBlock);
         
         LOG.info("Uploading block meta file " + s3_block_key);
         PutObjectRequest putReqMeta = new PutObjectRequest(bucket, s3_block_meta_key, local_meta_file);
         UploadInfo uploadBlockMeta = s3afs.putObject(putReqMeta);
-
-        // TODO: can this be async??
-        // TODO: use S3AFastUpload - https://hadoop.apache.org/docs/current/hadoop-aws/tools/hadoop-aws/index.html#Stabilizing:_S3A_Fast_Upload
+        
         try {
             uploadBlock.getUpload().waitForUploadResult();
             uploadBlockMeta.getUpload().waitForUploadResult();
@@ -366,6 +359,19 @@ public class S3DatasetImpl extends FsDatasetImpl {
             e.printStackTrace();
             LOG.error(e);
         }
+
+        Date start_close_blk = new Date();
+        synchronized (this) {
+            // release rbw space again on volume
+            FsVolumeImpl v = (FsVolumeImpl) replicaInfo.getVolume();
+            v.releaseReservedSpace(replicaInfo.getBytesReserved());
+
+            // remove from volumeMap, so we can get it from s3 instead
+            volumeMap.remove(bpid, replicaInfo.getBlockId());
+        }
+
+        long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
+        LOG.info("finalize_close_blk_time: " + diffInMillies);
         
         S3FinalizedReplica newReplicaInfo = new S3FinalizedReplica(
                 replicaInfo.getBlockId(), 
@@ -374,13 +380,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
                 replicaInfo.getGenerationStamp(),
                 volumes.getVolumes().get(0),
                 bucket);
-
-        // release rbw space again on volume
-        FsVolumeImpl v = (FsVolumeImpl) replicaInfo.getVolume();
-        v.releaseReservedSpace(replicaInfo.getBytesReserved());
         
-        // remove from volumeMap, so we can get it from s3 instead
-        volumeMap.remove(bpid, replicaInfo.getBlockId());
+        // free up space by removing uploaded files
         local_block_file.delete();
         local_meta_file.delete();
         

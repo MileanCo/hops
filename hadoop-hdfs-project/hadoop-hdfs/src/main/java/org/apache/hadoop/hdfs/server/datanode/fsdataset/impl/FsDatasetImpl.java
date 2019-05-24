@@ -1152,7 +1152,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     finalizeReplica(b.getBlockPoolId(), replicaInfo);
   }
   
-  private synchronized FinalizedReplica finalizeReplica(String bpid,
+  protected synchronized FinalizedReplica finalizeReplica(String bpid,
       ReplicaInfo replicaInfo) throws IOException {
     FinalizedReplica newReplicaInfo;
     if (replicaInfo.getState() == ReplicaState.RUR &&

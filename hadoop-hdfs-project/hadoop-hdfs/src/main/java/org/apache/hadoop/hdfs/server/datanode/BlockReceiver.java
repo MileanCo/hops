@@ -178,7 +178,11 @@ class BlockReceiver implements Closeable {
       } else {
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
+            
+             
             replicaInfo = datanode.data.createRbw(storageType, block);
+            
+            
             
             Date date_notifyNN = new Date();
             datanode.notifyNamenodeCreatingBlock(block, replicaInfo.getStorageUuid());
