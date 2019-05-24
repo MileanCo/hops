@@ -91,11 +91,16 @@ public class S3DatasetImpl extends FsDatasetImpl {
                     " and thus cannot be created.");
         }
         
+        Date start_get_vol = new Date();
         // create a new block
         FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
 
         // create an rbw file to hold block in the designated volume
         File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+
+        long diffInMillies = (new Date()).getTime() - start_get_vol.getTime();
+        LOG.info("rbw_get_vol_create_file time: " + diffInMillies);
+        
         ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
                 b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
         volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
