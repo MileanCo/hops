@@ -9,7 +9,6 @@ import org.apache.hadoop.fs.s3a.S3AFileSystemCommon;
 import org.apache.hadoop.fs.s3a.UploadInfo;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
-import org.apache.hadoop.hdfs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -80,27 +79,27 @@ public class S3DatasetImpl extends FsDatasetImpl {
         //namenode = datanode.getActiveNamenodeForBP();
     }
 
-    @Override // FsDatasetSpi
-    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
-                                                    ExtendedBlock b) throws IOException {
-        // checks local filesystem and S3 for the block
-        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
-        if (replicaInfo != null) {
-            throw new ReplicaAlreadyExistsException("Block " + b +
-                    " already exists in state " + replicaInfo.getState() +
-                    " and thus cannot be created.");
-        }
-        
-        // create a new block
-        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
-
-        // create an rbw file to hold block in the designated volume
-        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
-        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
-                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
-        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);        
-        return newReplicaInfo;
-    }
+//    @Override // FsDatasetSpi
+//    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
+//                                                    ExtendedBlock b) throws IOException {
+//        // checks local filesystem and S3 for the block
+//        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
+//        if (replicaInfo != null) {
+//            throw new ReplicaAlreadyExistsException("Block " + b +
+//                    " already exists in state " + replicaInfo.getState() +
+//                    " and thus cannot be created.");
+//        }
+//        
+//        // create a new block
+//        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
+//
+//        // create an rbw file to hold block in the designated volume
+//        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+//        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
+//                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
+//        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);        
+//        return newReplicaInfo;
+//    }
     
     public void downloadS3BlockTo(ExtendedBlock b, File dest) throws IOException {
         // TODO: check cache if block exists locally?
