@@ -97,10 +97,10 @@ class ReplicaMap {
    */
   ReplicaInfo get(String bpid, long blockId) {
     checkBlockPool(bpid);
-//    synchronized (mutex) {
+    synchronized (mutex) {
       Map<Long, ReplicaInfo> m = map.get(bpid);
       return m != null ? m.get(blockId) : null;
-//    }
+    }
   }
   
   /**
