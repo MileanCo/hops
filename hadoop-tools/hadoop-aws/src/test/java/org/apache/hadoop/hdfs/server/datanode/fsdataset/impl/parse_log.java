@@ -14,8 +14,11 @@ public class parse_log {
         int new_BlockReceiver_time = 0;
         int packet_responder_time = 0;
         int finalizeBlk_time=0;
+        int get_s3_finalized_blk_time = 0;
         int upload_time = 0;
         int delete_time = 0;
+        int notifyNamenodeCreatingBlock = 0;
+        int finalize_close_blk_time = 0;
         int opWriteBlock = 0;
         int completeFile_time = 0;
 
@@ -24,13 +27,14 @@ public class parse_log {
 
         String[] lines = out.split("\n");
         for (int i=0; i<lines.length;i++) {
-            String[] parts = lines[i].split(" ");
+            String[] parts = lines[i].split("\\s+");
             if (lines[i].contains("createRBW time")) {
+                System.out.println(lines[i]);
                 createRBW_time += Integer.parseInt(parts[6]);
                 System.out.println(lines[i]);
-            } else if (lines[i].contains("DFS.create")) {
-                dfs_create_time += Integer.parseInt(parts[5]);
+            } else if (lines[i].contains("DFS.create:")) {
                 System.out.println(lines[i]);
+                dfs_create_time += Integer.parseInt(parts[6]);
             } else if (lines[i].contains("new_BlockReceiver")) {
                 new_BlockReceiver_time += Integer.parseInt(parts[5]);
                 System.out.println(lines[i]);
@@ -49,23 +53,35 @@ public class parse_log {
             } else if (lines[i].contains("=== Delete")) {
                 System.out.println(lines[i]);
                 delete_time += Integer.parseInt(parts[10]);
+            } else if (lines[i].contains("notifyNamenodeCreatingBlock")) {
+                System.out.println(lines[i]);
+                notifyNamenodeCreatingBlock += Integer.parseInt(parts[6]);
+            } else if (lines[i].contains("finalize_close_blk_time")) {
+                System.out.println(lines[i]);
+                finalize_close_blk_time += Integer.parseInt(parts[5]);
+            } else if (lines[i].contains("get_s3_finalized_blk")) {
+                System.out.println(lines[i]);
+                get_s3_finalized_blk_time += Integer.parseInt(parts[5]);
             } else if (lines[i].contains("opWriteblock=")) {
                 System.out.println(lines[i]);
                 opWriteBlock += Integer.parseInt(parts[5]);
-            } else if (lines[i].contains("completeFile():")) {
+            } else if (lines[i].contains("completeFile()")) {
                 System.out.println(lines[i]);
-                completeFile_time += Integer.parseInt(parts[5]);
+                completeFile_time += Integer.parseInt(parts[6]);
             }
+
         }
 
         System.out.println("------------\n");
         System.out.println("dfs_create_time: " + dfs_create_time);
-        System.out.println("new_BlockReceiver time: " + new_BlockReceiver_time + " (createRBW time: " + createRBW_time + ")" );
+        System.out.println("new_BlockReceiver time: " + new_BlockReceiver_time + " (createRBW time: " + createRBW_time + " notifyNamenodeCreatingBlock: " + notifyNamenodeCreatingBlock + ")" );
         System.out.println("receiveBlock_time : " + receiveBlock_time);
         System.out.println("packet_responder_time: " + packet_responder_time);
         System.out.println("finalizeBlk_time: " + finalizeBlk_time);
         System.out.println("Upload time: " + upload_time);
         System.out.println("S3Finalized.delete time: " + delete_time);
+        System.out.println("finalize_close_blk_time: " + finalize_close_blk_time);
+        System.out.println("get_s3_finalized_blk_time: " + get_s3_finalized_blk_time);
         System.out.println("opWriteBlock time: " + opWriteBlock);
         System.out.println("completeFile_time time: " + completeFile_time);
 

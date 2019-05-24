@@ -253,8 +253,14 @@ public class S3DatasetImpl extends FsDatasetImpl {
     // Returns S3FinalizedReplica and also checks generation stamps matches
     // Query the namenode for a completed block instead of S3 for consistency --> doesnt work b/c NN has old GS for recovery
     public S3FinalizedReplica getS3FinalizedReplica(ExtendedBlock b) {
+        Date start_get_fins3 = new Date();
+        
         S3ConsistentRead consistentRead = new S3ConsistentRead(this);
         Block block = consistentRead.getS3Block(b);
+
+        long diffInMillies = (new Date()).getTime() - start_get_fins3.getTime();
+        LOG.info("get_s3_finalized_blk: " + diffInMillies);
+        
         if (block != null ) {
             return new S3FinalizedReplica(block, b.getBlockPoolId(), volumes.getVolumes().get(0), bucket);
         }
