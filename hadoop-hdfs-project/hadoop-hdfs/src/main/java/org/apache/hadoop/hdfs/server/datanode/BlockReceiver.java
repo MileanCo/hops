@@ -1321,18 +1321,17 @@ class BlockReceiver implements Closeable {
      * @param startTime time when BlockReceiver started receiving the block
      */
     private void finalizeBlock(long startTime) throws IOException {
+      Date start_close_blk = new Date();
       BlockReceiver.this.close();
+
+      long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
+      LOG.info("finalize_close_blk_time: " + diffInMillies);
+      
       final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
           : 0;
       block.setNumBytes(replicaInfo.getNumBytes());
       datanode.data.finalizeBlock(block);
-      
-      Date start_close_blk = new Date();
       datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
-      
-      long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
-      LOG.info("finalize_close_blk_time: " + diffInMillies);
-      
       if (ClientTraceLog.isInfoEnabled() && isClient) {
         long offset = 0;
         DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block

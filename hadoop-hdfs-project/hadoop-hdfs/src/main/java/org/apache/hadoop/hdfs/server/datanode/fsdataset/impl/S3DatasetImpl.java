@@ -83,6 +83,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
     @Override // FsDatasetSpi
     public synchronized ReplicaInPipeline createRbw(StorageType storageType,
                                                     ExtendedBlock b) throws IOException {
+        Date start_get_vol = new Date();
+        
         // checks local filesystem and S3 for the block
         ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
         if (replicaInfo != null) {
@@ -90,21 +92,18 @@ public class S3DatasetImpl extends FsDatasetImpl {
                     " already exists in state " + replicaInfo.getState() +
                     " and thus cannot be created.");
         }
+
+        long diffInMillies = (new Date()).getTime() - start_get_vol.getTime();
+        LOG.info("rbw_get_vol_create_file time: " + diffInMillies);
         
-        Date start_get_vol = new Date();
         // create a new block
         FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
 
         // create an rbw file to hold block in the designated volume
         File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
-
-        long diffInMillies = (new Date()).getTime() - start_get_vol.getTime();
-        LOG.info("rbw_get_vol_create_file time: " + diffInMillies);
-        
         ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
                 b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
         volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
-
         return newReplicaInfo;
     }
     
