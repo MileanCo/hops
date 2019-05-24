@@ -181,6 +181,7 @@ class BlockReceiver implements Closeable {
             Date date_rbw = new Date(); 
             
             replicaInfo = datanode.data.createRbw(storageType, block);
+            
             long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
             LOG.info("createRBW time: " + diffInMillies);
             

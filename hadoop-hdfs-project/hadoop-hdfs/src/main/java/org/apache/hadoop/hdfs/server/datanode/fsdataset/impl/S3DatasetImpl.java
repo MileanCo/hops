@@ -78,10 +78,10 @@ public class S3DatasetImpl extends FsDatasetImpl {
         List<InetSocketAddress> addrs = DFSUtil.getNameNodesServiceRpcAddresses(conf);
         namenode = datanode.connectToNN(addrs.get(0));
     }
-
+    
     @Override // FsDatasetSpi
     public ReplicaInPipeline createRbw(StorageType storageType,
-                                                    ExtendedBlock b) throws IOException {
+                                       ExtendedBlock b) throws IOException {
         // checks local filesystem and S3 for the block
         // TODO: this might make this block eventually consistent since it's checked before created
         //   FIX: just dont check S3, since it's impossible for this block to exist anyway. 
