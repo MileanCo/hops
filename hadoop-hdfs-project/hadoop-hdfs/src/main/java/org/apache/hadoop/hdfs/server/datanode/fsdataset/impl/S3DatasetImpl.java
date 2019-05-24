@@ -55,6 +55,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
         super.volumeMap = new S3ReplicaMap(this, this);
         bucket = conf.get(DFSConfigKeys.S3_DATASET_BUCKET, "");
         
+        
         Class<? extends S3AFileSystemCommon> s3AFilesystemClass = conf.getClass(
                 DFSConfigKeys.S3A_IMPL, S3AFileSystemCommon.class,
                 S3AFileSystemCommon.class);
