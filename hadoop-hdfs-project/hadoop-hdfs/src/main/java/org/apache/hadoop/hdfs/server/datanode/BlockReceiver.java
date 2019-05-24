@@ -1332,10 +1332,10 @@ class BlockReceiver implements Closeable {
       final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
           : 0;
       block.setNumBytes(replicaInfo.getNumBytes());
-      
+
       datanode.data.finalizeBlock(block);
-      
       datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
+      
       if (ClientTraceLog.isInfoEnabled() && isClient) {
         long offset = 0;
         DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block

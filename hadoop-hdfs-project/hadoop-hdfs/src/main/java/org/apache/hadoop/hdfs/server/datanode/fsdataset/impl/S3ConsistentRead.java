@@ -103,7 +103,7 @@ public class S3ConsistentRead {
             }
             S3Object meta_s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(metaObjReq);
             return new LengthInputStream(meta_s3_obj.getObjectContent(), meta_s3_obj.getObjectMetadata().getContentLength());
-            
+
 //        } catch (IOException err) {
 //            // S3Guard exceptions appear here
 //            throw new CustomRuntimeException(err.getMessage());

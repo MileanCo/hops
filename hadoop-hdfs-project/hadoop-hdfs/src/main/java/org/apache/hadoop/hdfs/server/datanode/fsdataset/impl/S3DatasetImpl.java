@@ -103,7 +103,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
                     b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
             volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
         }
-        
+
         return newReplicaInfo;
     }
     
