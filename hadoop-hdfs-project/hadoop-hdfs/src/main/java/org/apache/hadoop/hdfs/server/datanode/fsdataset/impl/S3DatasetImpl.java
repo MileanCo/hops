@@ -172,10 +172,16 @@ public class S3DatasetImpl extends FsDatasetImpl {
     }
     
     @Override // FsDatasetSpi
-    public synchronized ReplicaRecoveryInfo initReplicaRecovery(BlockRecoveryCommand.RecoveringBlock rBlock) throws IOException {
+    public ReplicaRecoveryInfo initReplicaRecovery(BlockRecoveryCommand.RecoveringBlock rBlock) throws IOException {
         String bpid = rBlock.getBlock().getBlockPoolId();
+        
+        
         // get the correct replica from S3 that matches given GS
-        final ReplicaInfo replica = volumeMap.get(bpid, rBlock.getBlock().getLocalBlock());
+        ReplicaInfo replica;
+        synchronized (this) {
+            replica = volumeMap.get(bpid, rBlock.getBlock().getLocalBlock());    
+        }
+        
         
         if (replica != null && replica.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
             // set the finalized dir on the replica
@@ -189,16 +195,19 @@ public class S3DatasetImpl extends FsDatasetImpl {
             replica.setDir(blockDir);
 
             
-            // Write block to disk
+            // Write block to disk [for performance, dont synchronize this]
             downloadS3BlockTo(rBlock.getBlock(), replica.getBlockFile());
             downloadS3BlockMetaTo(rBlock.getBlock(), replica.getMetaFile());
 
-            // add downloaded block to volumemap so we can find this exact replica class again
-            volumeMap.add(bpid, replica);
+            synchronized (this) {
+                // add downloaded block to volumemap so we can find this exact replica class again
+                volumeMap.add(bpid, replica);
+            }
         }
-
-        return initReplicaRecovery(bpid, volumeMap,
-                rBlock.getBlock().getLocalBlock(), rBlock.getNewGenerationStamp(), datanode.getDnConf().getXceiverStopTimeout());
+        synchronized (this) {
+            return initReplicaRecovery(bpid, volumeMap,
+                    rBlock.getBlock().getLocalBlock(), rBlock.getNewGenerationStamp(), datanode.getDnConf().getXceiverStopTimeout());    
+        }
     }
 
 
