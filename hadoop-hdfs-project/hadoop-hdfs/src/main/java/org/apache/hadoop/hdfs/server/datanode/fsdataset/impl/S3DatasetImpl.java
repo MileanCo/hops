@@ -316,17 +316,16 @@ public class S3DatasetImpl extends FsDatasetImpl {
         // just delete older block even if it's not there
         Date start_del_time = new Date();
         
+        // doesnt need to be synchronized, only changes S3
         ExtendedBlock old_b = new ExtendedBlock(b.getBlockPoolId(), b.getBlockId(), b.getNumBytes(), b.getGenerationStamp());
         old_b.setGenerationStamp(old_b.getGenerationStamp() - 1);
-//        if (contains(old_b)) {
-        if (false) {
+        if (contains(old_b)) {
             s3afs.delete(new Path(getBlockKey(old_b)), false);
             s3afs.delete(new Path(getMetaKey(old_b)), false);
             LOG.info("Deleted old finalized block " + old_b + " for append.");
         }
         long diffInMillies_delete = (new Date()).getTime() - start_del_time.getTime();
         LOG.info("=== Delete prev block time - " + diffInMillies_delete + " ms for append safety.");
-        
     }
     
     /**
@@ -407,22 +406,24 @@ public class S3DatasetImpl extends FsDatasetImpl {
      *     to rbw directory fails
      */
     @Override
-    protected synchronized ReplicaBeingWritten append(String bpid, FinalizedReplica finalizedReplicaInfo, long newGS, long estimateBlockLen)
+    protected ReplicaBeingWritten append(String bpid, FinalizedReplica finalizedReplicaInfo, long newGS, long estimateBlockLen)
             throws IOException {
-        // If the block is cached, start uncaching it.
-        cacheManager.uncacheBlock(bpid, finalizedReplicaInfo.getBlockId());
-        // unlink the finalized replica
-        finalizedReplicaInfo.unlinkBlock(1);
-                
+        synchronized (this) {
+            // If the block is cached, start uncaching it.
+            cacheManager.uncacheBlock(bpid, finalizedReplicaInfo.getBlockId());
+            // unlink the finalized replica
+            finalizedReplicaInfo.unlinkBlock(1);
+        }
+
         // TODO: finalizedReplica shouldnt have a vol
         FsVolumeImpl v = (FsVolumeImpl) finalizedReplicaInfo.getVolume();
         if (v.getAvailable() < estimateBlockLen - finalizedReplicaInfo.getNumBytes()) {
             throw new DiskChecker.DiskOutOfSpaceException(
                     "Insufficient space for appending to " + finalizedReplicaInfo);
         }
-        
+
         File newBlkFile = new File(v.getRbwDir(bpid), finalizedReplicaInfo.getBlockName());
-        
+
         ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(
                 finalizedReplicaInfo.getBlockId(), finalizedReplicaInfo.getNumBytes(), newGS,
                 v, newBlkFile.getParentFile(), Thread.currentThread(), estimateBlockLen);
@@ -431,6 +432,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
         // download block file to rbw directory
         ExtendedBlock block_to_download = new ExtendedBlock(bpid, newReplicaInfo.getBlockId());
         block_to_download.setGenerationStamp(finalizedReplicaInfo.getGenerationStamp());
+        
+        
         LOG.info("Downloading block file to " + newBlkFile + ", file length=" + finalizedReplicaInfo.getBytesOnDisk());
         try {
             // Download block file to RBW location
@@ -448,18 +451,19 @@ public class S3DatasetImpl extends FsDatasetImpl {
         } catch (IOException e) {
             // delete downloaded meta file 
             newmeta.delete();
-
             throw new IOException("Block " + finalizedReplicaInfo + " reopen failed. " +
                     " Unable to move download block to rbw dir " + newBlkFile, e);
         }
 
-        // Replace finalized replica by a RBW replica in replicas map
-        // so that getReplicaInfo() will return newReplicaInfo
-        volumeMap.add(bpid, newReplicaInfo);
-        v.reserveSpaceForRbw(estimateBlockLen - finalizedReplicaInfo.getNumBytes());
-        
-        // we dont delete from s3 incase something fails, 
-        // the finalizeBlock operation will delete the previous block version.
+        synchronized (this) {
+            // Replace finalized replica by a RBW replica in replicas map
+            // so that getReplicaInfo() will return newReplicaInfo
+            volumeMap.add(bpid, newReplicaInfo);
+            v.reserveSpaceForRbw(estimateBlockLen - finalizedReplicaInfo.getNumBytes());
+
+            // we dont delete from s3 incase something fails, 
+            // the finalizeBlock operation will delete the previous block version.   
+        }
         
         return newReplicaInfo;
     }
