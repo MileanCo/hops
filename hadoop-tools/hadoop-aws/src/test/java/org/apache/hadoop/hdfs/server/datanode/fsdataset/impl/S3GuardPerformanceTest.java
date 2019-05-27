@@ -38,13 +38,13 @@ public class S3GuardPerformanceTest {
     private Configuration ndb_conf;
     private S3AFileSystem ndb_s3afs;
     private  boolean has_setup = false;
-    
-//    private String NAMENODE_RCP_ADDRESS = null;
+
+    //    private String NAMENODE_RCP_ADDRESS = null;
     private String NAMENODE_RCP_ADDRESS = "10.24.0.15:8020";
     private final int NUM_FILES = 100;
     private final int NUM_SUBDIRS = 100;
     private final int fileSize = 1024;
-    
+
 
     private static MiniDFSCluster cluster;
 
@@ -73,12 +73,12 @@ public class S3GuardPerformanceTest {
         // setup NDB
         ndb_conf = new Configuration();
         if (NAMENODE_RCP_ADDRESS != null) {
-            ndb_conf.set(DFS_NAMENODE_RPC_ADDRESS_KEY, NAMENODE_RCP_ADDRESS);    
+            ndb_conf.set(DFS_NAMENODE_RPC_ADDRESS_KEY, NAMENODE_RCP_ADDRESS);
         } else {
             cluster = new MiniDFSCluster.Builder(ndb_conf).numDataNodes(1).build();
             cluster.waitActive();
         }
-        
+
         ndb_conf.set(S3_METADATA_STORE_IMPL, S3GUARD_METASTORE_NDB);
         ndb_conf.setClass(S3_CLIENT_FACTORY_IMPL, DefaultS3ClientFactory.class, S3ClientFactory.class);
         ndb_conf.set(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY, S3URI);
@@ -130,10 +130,10 @@ public class S3GuardPerformanceTest {
                 ndb_s3afs.copyFromLocalFile(new Path(file_path), new Path(key));
             }
         }
-        
+
         has_setup = true;
     }
-    
+
     private int ls_tree(int count, DirListingMetadata dir, MetadataStore ms, boolean delete ) throws IOException {
         for (PathMetadata path : dir.getListing()) {
             LOG.info(path);
@@ -155,15 +155,15 @@ public class S3GuardPerformanceTest {
         setup_bucket();
 
         Path rootDir = new Path(S3URI );
-        
+
         // TODO measure time taken by s3guard with DynamoDB to LS dirs
         Date start_list_dynamo = new Date();
-        
+
         DirListingMetadata rootDirList_dynamo = dynamo_ms.listChildren(rootDir);
         LOG.info(rootDirList_dynamo.prettyPrint());
         int tree_size_dynamo = ls_tree(0, rootDirList_dynamo, dynamo_ms, false);
         LOG.info("Found " + tree_size_dynamo + " DynamoDB files");
-        
+
         long diffInMillies_dynamo = (new Date()).getTime() - start_list_dynamo.getTime();
 
 
@@ -203,12 +203,12 @@ public class S3GuardPerformanceTest {
 
         // TODO measure time taken by s3guard with NDB to LS dirs then delete
         Date start_list_ndb = new Date();
-        
+
         DirListingMetadata rootDirList_ndb = ndb_ms.listChildren(rootDir);
         LOG.info(rootDirList_ndb.prettyPrint());
         int tree_size_ndb = ls_tree(0, rootDirList_ndb, ndb_ms, true);
         LOG.info("Found " + tree_size_ndb + " NDB files");
-        
+
         long diffInMillies_ndb = (new Date()).getTime() - start_list_ndb.getTime();
 
         // summary
@@ -216,6 +216,6 @@ public class S3GuardPerformanceTest {
         LOG.info("diffInMillies_ndb: " + diffInMillies_ndb  + " ms");
 
         Assert.assertEquals(tree_size_dynamo, tree_size_ndb);
-        
+
     }
 }
