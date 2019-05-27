@@ -341,7 +341,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
      * Upload file to S3 and update volumeMap (replica map)
      * Override method from FsDatasetImpl to support recovery
      */
-    // TODO: is synchronized still needed for s3?
     @Override
     protected S3FinalizedReplica finalizeReplica (String bpid, ReplicaInfo replicaInfo) throws IOException {
         File local_block_file = replicaInfo.getBlockFile();
