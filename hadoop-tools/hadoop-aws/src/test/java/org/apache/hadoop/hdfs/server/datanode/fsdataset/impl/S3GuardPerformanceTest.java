@@ -40,7 +40,11 @@ public class S3GuardPerformanceTest {
     private  boolean has_setup = false;
     
 //    private String NAMENODE_RCP_ADDRESS = null;
-    private String NAMENODE_RCP_ADDRESS = "localhost:8020";
+    private String NAMENODE_RCP_ADDRESS = "10.24.0.15:8020";
+    private final int NUM_FILES = 100;
+    private final int NUM_SUBDIRS = 100;
+    private final int fileSize = 1024;
+    
 
     private static MiniDFSCluster cluster;
 
@@ -101,9 +105,6 @@ public class S3GuardPerformanceTest {
         if (has_setup) {
             return;
         }
-        int NUM_FILES = 10;
-        int NUM_SUBDIRS = 10;
-        int fileSize = 1024;
 
         byte[] outBuffer = new byte[(int) fileSize];
         for (int i = 0; i < fileSize; i++) {
