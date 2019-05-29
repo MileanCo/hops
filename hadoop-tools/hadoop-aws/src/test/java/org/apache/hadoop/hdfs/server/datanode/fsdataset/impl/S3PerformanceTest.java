@@ -368,7 +368,6 @@ public class S3PerformanceTest {
             Path f = new Path(fname);
             try {
                 // simulate new block data
-                Date start_create2 = new Date();
                 for (int j = 0; j < fileSize; j++) {
                     outBuffer[j] = (byte) (j & 0x00ff);
                 }
@@ -428,6 +427,7 @@ public class S3PerformanceTest {
 //                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
                     long diffInMillies_create_file = (new Date()).getTime() - start_create_meta.getTime();
                     time_create += diffInMillies_create_file;
+                    time_create_count++;
                     LOG.info(" Client create meta file: " + diffInMillies_create_file + " ms");
 
 //                     WRITE new meta file
@@ -466,6 +466,7 @@ public class S3PerformanceTest {
                     
                     local_block_file.delete();
                     local_meta_file.delete();
+                    
 
                     // reads this from S3 now
 //                        readData(fname, inBuffer, outBuffer.length, 0, fs, blockSize);
