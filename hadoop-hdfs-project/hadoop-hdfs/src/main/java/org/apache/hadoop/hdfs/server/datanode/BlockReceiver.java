@@ -178,10 +178,11 @@ class BlockReceiver implements Closeable {
       } else {
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
+            Date date_rbw = new Date(); 
             
-             
             replicaInfo = datanode.data.createRbw(storageType, block);
-            
+            long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
+            LOG.info("createRBW time: " + diffInMillies);
             
             
             Date date_notifyNN = new Date();

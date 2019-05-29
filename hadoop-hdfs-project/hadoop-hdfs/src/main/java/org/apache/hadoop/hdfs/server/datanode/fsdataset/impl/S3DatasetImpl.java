@@ -82,29 +82,27 @@ public class S3DatasetImpl extends FsDatasetImpl {
     }
 
     @Override // FsDatasetSpi
-    public synchronized ReplicaInPipeline createRbw(StorageType storageType,
+    public ReplicaInPipeline createRbw(StorageType storageType,
                                                     ExtendedBlock b) throws IOException {
-        Date date_rbw = new Date();
-        
         // checks local filesystem and S3 for the block
-        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock().getBlockId());
+        ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
         if (replicaInfo != null) {
             throw new ReplicaAlreadyExistsException("Block " + b +
                     " already exists in state " + replicaInfo.getState() +
                     " and thus cannot be created.");
         }
 
-        // create a new block
-        FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
+        ReplicaBeingWritten newReplicaInfo;
+        synchronized (this) {
+            // create a new block
+            FsVolumeImpl v = volumes.getNextVolume(storageType, b.getNumBytes());
 
-        // create an rbw file to hold block in the designated volume
-        File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
-        ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
-                b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
-        volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
-        
-        long diffInMillies = (new Date()).getTime() - date_rbw.getTime();
-        LOG.info("createRBW time: " + diffInMillies);
+            // create an rbw file to hold block in the designated volume
+            File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+            newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(),
+                    b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
+            volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
+        }
         
         return newReplicaInfo;
     }
@@ -175,13 +173,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public ReplicaRecoveryInfo initReplicaRecovery(BlockRecoveryCommand.RecoveringBlock rBlock) throws IOException {
         String bpid = rBlock.getBlock().getBlockPoolId();
         
-        
         // get the correct replica from S3 that matches given GS
-        ReplicaInfo replica;
-        synchronized (this) {
-            replica = volumeMap.get(bpid, rBlock.getBlock().getLocalBlock());    
-        }
-        
+        ReplicaInfo replica = volumeMap.get(bpid, rBlock.getBlock().getLocalBlock());
         
         if (replica != null && replica.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
             // set the finalized dir on the replica
@@ -224,7 +217,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
      */
     @Override
     public ReplicaInfo getReplicaInfo(ExtendedBlock b) throws ReplicaNotFoundException {
-        // volume map only contains non-s3 replicas
         ReplicaInfo info = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
         if (info == null) {
             throw new ReplicaNotFoundException(ReplicaNotFoundException.NON_EXISTENT_REPLICA + b);
@@ -270,13 +262,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
     // Returns S3FinalizedReplica and also checks generation stamps matches
     // Query the namenode for a completed block instead of S3 for consistency --> doesnt work b/c NN has old GS for recovery
     public S3FinalizedReplica getS3FinalizedReplica(ExtendedBlock b) {
-        Date start_get_fins3 = new Date();
-        
         S3ConsistentRead consistentRead = new S3ConsistentRead(this);
         Block block = consistentRead.getS3Block(b);
-
-        long diffInMillies = (new Date()).getTime() - start_get_fins3.getTime();
-        LOG.info("get_s3_finalized_blk: " + diffInMillies);
         
         if (block != null ) {
             return new S3FinalizedReplica(block, b.getBlockPoolId(), volumes.getVolumes().get(0), bucket);
@@ -510,8 +497,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
 
 
     @Override // FsDatasetSpi
-    public synchronized boolean contains(final ExtendedBlock block) {
-        final long blockId = block.getLocalBlock().getBlockId();
+    public boolean contains(final ExtendedBlock block) {
         try {
             // S3guard marks deleted files, so this would return properly
             // TODO: might need to check GS still
