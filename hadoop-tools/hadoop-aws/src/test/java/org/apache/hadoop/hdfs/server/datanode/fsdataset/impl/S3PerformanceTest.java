@@ -423,7 +423,10 @@ public class S3PerformanceTest {
                     }
                     // fake checking status of the file once
                     // do this OR s3afs.contains
-                    s3afs.exists(new Path(fname));
+                    // fake synchronized GET (DN does this).
+                    synchronized (this ) {
+                        s3afs.exists(new Path(fname));
+                    }
 //                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
                     long diffInMillies_create_file = (new Date()).getTime() - start_create_meta.getTime();
                     time_create += diffInMillies_create_file;
@@ -536,7 +539,10 @@ public class S3PerformanceTest {
                 if (is_s3) {
                     // fake checking status of the file once, since DN does this
                     // do this OR s3afs.contains
-                    s3afs.exists(new Path(fname));
+                    // fake synchronized GET (DN does this).
+                    synchronized (this ) {
+                        s3afs.exists(new Path(fname));    
+                    }
                 }
                 
                 File dest1 = new File(local_block_file + ".downloaded");
