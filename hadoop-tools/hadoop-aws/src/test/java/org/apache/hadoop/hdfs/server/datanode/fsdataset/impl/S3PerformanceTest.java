@@ -532,6 +532,13 @@ public class S3PerformanceTest {
 
                 LOG.info("Reading file " + fname);
                 Date start_read = new Date();
+                
+                if (is_s3) {
+                    // fake checking status of the file once, since DN does this
+                    // do this OR s3afs.contains
+                    s3afs.exists(new Path(fname));
+                }
+                
                 File dest1 = new File(local_block_file + ".downloaded");
                 FileUtils.copyInputStreamToFile(fs.open(new Path(fname)).getWrappedStream(), dest1);
                 Assert.assertEquals(fileSize, dest1.length());
