@@ -548,6 +548,23 @@ public class S3AFileSystem extends S3AFileSystemCommon {
             inputPolicy));
   }
 
+  public FSDataInputStream open(Path f, long file_length) {
+    LOG.debug("Opening '{}' for reading.", f);
+
+    return new FSDataInputStream(
+            new S3AInputStream(new S3ObjectAttributes(
+                    bucket,
+                    pathToKey(f),
+                    serverSideEncryptionAlgorithm,
+                    getServerSideEncryptionKey(getConf())),
+                    file_length,
+                    s3,
+                    statistics,
+                    instrumentation,
+                    readAhead,
+                    inputPolicy));
+  }
+
   /**
    * Create an FSDataOutputStream at the indicated Path with write-progress
    * reporting.

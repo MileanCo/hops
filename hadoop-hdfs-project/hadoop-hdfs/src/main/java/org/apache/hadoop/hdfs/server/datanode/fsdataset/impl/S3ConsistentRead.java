@@ -119,8 +119,11 @@ public class S3ConsistentRead {
         LOG.info("Getting block " + s3dataset.getBucket() + ":" + block_aws_key + " with seekOffset " + seekOffset);
 
         try {
-            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key);
-            in.seek(seekOffset);
+            // use the new custom open method that skips doing a fileStatus check
+            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key, b.getNumBytes());
+            if (seekOffset > 0) {
+                in.seek(seekOffset);
+            }
             return in.getWrappedStream();
 
         } catch (IOException err) {

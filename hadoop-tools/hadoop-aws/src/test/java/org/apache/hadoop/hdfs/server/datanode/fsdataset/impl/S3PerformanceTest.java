@@ -136,7 +136,7 @@ public class S3PerformanceTest {
 
     @Test
     public void testS3RecordTime1MB_parallel_clients() throws IOException {
-        final int NUM_CLIENTS = 10;
+        final int NUM_CLIENTS = 20;
         class FakeClient implements Runnable {
             long BLOCK_SIZE = 1048576; // bytes
             long BLOCK_SIZE_META = 8199; // bytes

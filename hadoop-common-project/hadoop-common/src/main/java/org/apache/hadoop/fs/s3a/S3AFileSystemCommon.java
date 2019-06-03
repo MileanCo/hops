@@ -46,8 +46,10 @@ public abstract class S3AFileSystemCommon extends FileSystem {
 
     public abstract ObjectMetadata newObjectMetadata();
     public abstract ObjectMetadata newObjectMetadata(long length);
+    
+    public abstract FSDataInputStream open(Path f, long file_length);
 
-    /** NEW methods for Datanode S3 */
+        /** NEW methods for Datanode S3 */
     
     // only used by testing
     @VisibleForTesting
