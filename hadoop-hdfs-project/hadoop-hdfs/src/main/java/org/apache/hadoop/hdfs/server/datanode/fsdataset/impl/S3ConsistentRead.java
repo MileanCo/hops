@@ -1,7 +1,9 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
@@ -91,12 +93,17 @@ public class S3ConsistentRead {
         Path block_meta_aws_key = new Path(block_meta_aws_key_str);
         LOG.info("Getting meta " + s3dataset.getBucket() + ":" + block_meta_aws_key);
         try {
-//            s3dataset.getS3AFileSystem().getObjectMetadata(block_meta_aws_key);
-            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
-            return in.getWrappedStream();
-        } catch (IOException err) {
-            // S3Guard exceptions appear here
-            throw new CustomRuntimeException(err.getMessage());
+            // TODO: call this with num_bytes of meta block file so that we avoid RR to S3
+//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
+            
+            GetObjectRequest metaObjReq = new GetObjectRequest(s3dataset.getBucket(), block_meta_aws_key_str); 
+            S3Object meta_s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(metaObjReq);
+            return meta_s3_obj.getObjectContent();
+            
+//            return in.getWrappedStream();
+//        } catch (IOException err) {
+//            // S3Guard exceptions appear here
+//            throw new CustomRuntimeException(err.getMessage());
         } catch (AmazonS3Exception err) {
             LOG.error(block_meta_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
