@@ -540,9 +540,9 @@ public class S3PerformanceTest {
                     // fake checking status of the file once, since DN does this
                     // do this OR s3afs.contains
                     // fake synchronized GET (DN does this).
-                    synchronized (this ) {
-                        s3afs.exists(new Path(fname));    
-                    }
+//                    synchronized (this ) {
+                        s3afs.getFileStatus(new Path(fname));    
+//                    }
                 }
                 
                 File dest1 = new File(local_block_file + ".downloaded");
