@@ -150,7 +150,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
 
         if (replicaInfo == null || replicaInfo.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
             S3ConsistentRead read = new S3ConsistentRead(this);
-            return new LengthInputStream(read.getS3BlockMetaInputStream(b), b.getNumBytes());
+            return read.getS3BlockMetaInputStream(b);
         } else {
             return super.getMetaDataInputStream(b);
         }
