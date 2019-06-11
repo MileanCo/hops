@@ -424,9 +424,9 @@ public class S3PerformanceTest {
                     // fake checking status of the file once
                     // do this OR s3afs.contains
                     // fake synchronized GET (DN does this).
-                    synchronized (this ) {
-                        s3afs.exists(new Path(fname));
-                    }
+//                    synchronized (this ) {
+//                        s3afs.exists(new Path(fname));
+//                    }
 //                        ObjectMetadata s3Object_meta = s3afs.getObjectMetadata(f);
                     long diffInMillies_create_file = (new Date()).getTime() - start_create_meta.getTime();
                     time_create += diffInMillies_create_file;
@@ -541,7 +541,7 @@ public class S3PerformanceTest {
                     // do this OR s3afs.contains
                     // fake synchronized GET (DN does this).
 //                    synchronized (this ) {
-                        s3afs.getFileStatus(new Path(fname));    
+//                        s3afs.getFileStatus(new Path(fname));    
 //                    }
                 }
                 

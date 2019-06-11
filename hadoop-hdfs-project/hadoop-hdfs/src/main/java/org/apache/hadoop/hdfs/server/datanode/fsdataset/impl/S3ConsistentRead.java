@@ -88,7 +88,7 @@ public class S3ConsistentRead {
     }
 
 
-    public LengthInputStream getS3BlockMetaInputStream(ExtendedBlock b) {
+    public LengthInputStream getS3BlockMetaInputStream(ExtendedBlock b, long seekOffset) {
         String block_meta_aws_key_str = S3DatasetImpl.getMetaKey(b.getBlockPoolId(), b.getBlockId(), b.getGenerationStamp());
         Path block_meta_aws_key = new Path(block_meta_aws_key_str);
         LOG.info("Getting meta " + s3dataset.getBucket() + ":" + block_meta_aws_key);
@@ -97,9 +97,11 @@ public class S3ConsistentRead {
 //            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
 //            return in.getWrappedStream();
 //            
-            GetObjectRequest metaObjReq = new GetObjectRequest(s3dataset.getBucket(), block_meta_aws_key_str); 
+            GetObjectRequest metaObjReq = new GetObjectRequest(s3dataset.getBucket(), block_meta_aws_key_str);
+            if (seekOffset > 0) {
+                metaObjReq.setRange(seekOffset);
+            }
             S3Object meta_s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(metaObjReq);
-            
             return new LengthInputStream(meta_s3_obj.getObjectContent(), meta_s3_obj.getObjectMetadata().getContentLength());
             
 //        } catch (IOException err) {
@@ -113,7 +115,7 @@ public class S3ConsistentRead {
         }
 
         if (doesBlockExist(b.getBlockPoolId(), b.getBlockId())) {
-            return getS3BlockMetaInputStream(b);
+            return getS3BlockMetaInputStream(b, seekOffset);
         } else {
             return null;
         }

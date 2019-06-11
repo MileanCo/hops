@@ -118,7 +118,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public void downloadS3BlockMetaTo(ExtendedBlock b, File dest) throws IOException {
         // TODO: check cache if block exists locally?
         S3ConsistentRead s3read = new S3ConsistentRead(this);
-        InputStream blockMetaInputStream = s3read.getS3BlockMetaInputStream(b);
+        InputStream blockMetaInputStream = s3read.getS3BlockMetaInputStream(b, 0);
         FileUtils.copyInputStreamToFile(blockMetaInputStream, dest);
     }
     
@@ -150,7 +150,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
 
         if (replicaInfo == null || replicaInfo.getState() == HdfsServerConstants.ReplicaState.FINALIZED) {
             S3ConsistentRead read = new S3ConsistentRead(this);
-            return read.getS3BlockMetaInputStream(b);
+            return read.getS3BlockMetaInputStream(b, seekOffset);
         } else {
             return super.getMetaDataInputStream(b);
         }
