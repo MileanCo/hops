@@ -77,14 +77,14 @@ public class S3DatasetImpl extends FsDatasetImpl {
         // also connect to NN
         List<InetSocketAddress> addrs = DFSUtil.getNameNodesServiceRpcAddresses(conf);
         namenode = datanode.connectToNN(addrs.get(0));
-        // TODO: use below instead whenver a block is queried?
-        //namenode = datanode.getActiveNamenodeForBP();
     }
 
     @Override // FsDatasetSpi
     public ReplicaInPipeline createRbw(StorageType storageType,
                                                     ExtendedBlock b) throws IOException {
         // checks local filesystem and S3 for the block
+        // TODO: this might make this block eventually consistent since it's checked before created
+        //   FIX: just dont check S3, since it's impossible for this block to exist anyway. 
         ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
         if (replicaInfo != null) {
             throw new ReplicaAlreadyExistsException("Block " + b +
@@ -289,7 +289,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
      * Complete the block write!
      */
     @Override // FsDatasetSpi
-    public void finalizeBlock(ExtendedBlock b) throws IOException {
+        public void finalizeBlock(ExtendedBlock b) throws IOException {
         if (Thread.interrupted()) {
             // Don't allow data modifications from interrupted threads
             throw new IOException("Cannot finalize block from Interrupted Thread");
@@ -308,13 +308,14 @@ public class S3DatasetImpl extends FsDatasetImpl {
         LOG.info("=== Upload block " + diffInMillies_upload + " ms ");
         
         
-        // TODO: performance improvement... defer delete until later? 
         // just delete older block even if it's not there
         Date start_del_time = new Date();
         
         // doesnt need to be synchronized, only changes S3
         ExtendedBlock old_b = new ExtendedBlock(b.getBlockPoolId(), b.getBlockId(), b.getNumBytes(), b.getGenerationStamp());
         old_b.setGenerationStamp(old_b.getGenerationStamp() - 1);
+        
+        // TODO: performance improvement... defer delete until later?
         if (contains(old_b)) {
             s3afs.delete(new Path(getBlockKey(old_b)), false);
             s3afs.delete(new Path(getMetaKey(old_b)), false);
@@ -536,14 +537,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
     public void uncache(String bpid, long[] blockIds) {
         // TODO: preemptively download S3 block and store it in a map?
     }
-    
-
-    // we keep these original methods for non-s3 blocks like RBW
-//    File getFile(final String bpid, final long blockId) {
-//    }
-//    File getBlockFile(String bpid, Block b) throws IOException {
-//        throw new NotImplementedException();
-//    }
     
     /**
      * Find the block's on-disk length
