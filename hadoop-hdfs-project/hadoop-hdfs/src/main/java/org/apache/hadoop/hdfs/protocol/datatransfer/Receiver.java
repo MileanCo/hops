@@ -30,7 +30,6 @@ import org.apache.htrace.core.Tracer;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Date;
 
 import static org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil.fromProto;
 import static org.apache.hadoop.hdfs.protocolPB.PBHelper.vintPrefixed;
@@ -97,10 +96,7 @@ public abstract class Receiver implements DataTransferProtocol {
         opReadBlock();
         break;
       case WRITE_BLOCK:
-        Date start_d = new Date();
         opWriteBlock(in);
-        long diffInMillies = (new Date()).getTime() - start_d.getTime();
-        LOG.info("opWriteblock= " + diffInMillies + " ms");
         break;
       case REPLACE_BLOCK:
         opReplaceBlock(in);

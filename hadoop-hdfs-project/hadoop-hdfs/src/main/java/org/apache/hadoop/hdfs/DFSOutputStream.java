@@ -1942,14 +1942,10 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
       final int dbFileMaxSize) throws IOException {
     final HdfsFileStatus stat;
     try {
-      // record time on NN
-      Date start = new Date();
       stat = dfsClient.namenode.create(src, masked, dfsClient.clientName,
           new EnumSetWritable<>(flag), createParent, replication,
               blockSize, policy);
       
-      long diffInMillies = (new Date()).getTime() - start.getTime();
-      LOG.info("=== NN CREATE TIME: " + diffInMillies + " ms");
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
               DSQuotaExceededException.class, FileAlreadyExistsException.class,
@@ -2600,12 +2596,7 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
     // get last block before destroying the streamer
     ExtendedBlock lastBlock = streamer.getBlock();
     
-    Date start_close = new Date();
-    
     completeFile(lastBlock);
-    
-    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-    LOG.info("completeFile(): " + diffInMillies_close);
     
     closeThreads(false);
     dfsClient.endFileLease(fileId);
@@ -2674,8 +2665,6 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
       data = getSmallFileData();
     }
     
-    Date start_close = new Date();
-    
     try {
       fileComplete =
               dfsClient.namenode.complete(src, dfsClient.clientName, last, fileId, data);
@@ -2690,9 +2679,6 @@ public class DFSOutputStream extends FSOutputSummer implements Syncable, CanSetD
         throw e;
       }
     }
-    
-    long diffInMillies_close = (new Date()).getTime() - start_close.getTime();
-    LOG.info("dfsClient.namenode.complete(): " + diffInMillies_close);
     
     return fileComplete;
   }

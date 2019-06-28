@@ -271,20 +271,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
         return null;
     }
 
-
-    // This is NOT a read - it doesnt read the block - only gets block information
-    // doesnt check GS
-//    @Override // FsDatasetSpi
-//    public Block getStoredBlock(String bpid, long blkId) {
-//        // Look at the volume map for the block; if not found it will query namenode
-////        return volumeMap.get(bpid, blkId);
-//        // just get the meta
-//        return getReplicaInfo(bpid, blkId);
-////        S3ConsistentRead consistentRead = new S3ConsistentRead(this);
-////        return consistentRead.getS3Block(bpid, blkId);
-//    }
-
-
     /**
      * Complete the block write!
      */
@@ -354,8 +340,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
             e.printStackTrace();
             LOG.error(e);
         }
-
-        Date start_close_blk = new Date();
+        
         synchronized (this) {
             // release rbw space again on volume
             FsVolumeImpl v = (FsVolumeImpl) replicaInfo.getVolume();
@@ -364,9 +349,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
             // remove from volumeMap, so we can get it from s3 instead
             volumeMap.remove(bpid, replicaInfo.getBlockId());
         }
-
-        long diffInMillies = (new Date()).getTime() - start_close_blk.getTime();
-        LOG.info("finalize_close_blk_time: " + diffInMillies);
         
         S3FinalizedReplica newReplicaInfo = new S3FinalizedReplica(
                 replicaInfo.getBlockId(), 

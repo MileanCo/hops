@@ -729,9 +729,6 @@ class DataXceiver extends Receiver implements Runnable {
             .setFirstBadLink(firstBadLink).build().writeDelimitedTo(replyOut);
         replyOut.flush();
       }
-
-      // receive the block and mirror to the next target
-      Date start_receiveBlock = new Date();
       
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
@@ -746,10 +743,7 @@ class DataXceiver extends Receiver implements Runnable {
           writeResponse(SUCCESS, null, replyOut);
         }
       }
-
-      long diffInMillies = (new Date()).getTime() - start_receiveBlock.getTime();
-      LOG.info("receiveBlock_time: " + diffInMillies);
-
+      
       // update its generation stamp
       if (isClient && stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         block.setGenerationStamp(latestGenerationStamp);
