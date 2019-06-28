@@ -1326,27 +1326,26 @@ class BlockReceiver implements Closeable {
      * @param startTime time when BlockReceiver started receiving the block
      */
     private void finalizeBlock(long startTime) throws IOException {
-      
-      BlockReceiver.this.close();
-      
-      final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
-          : 0;
-      block.setNumBytes(replicaInfo.getNumBytes());
+        BlockReceiver.this.close();
 
-      datanode.data.finalizeBlock(block);
-      datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
-      
-      if (ClientTraceLog.isInfoEnabled() && isClient) {
-        long offset = 0;
-        DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block
-            .getBlockPoolId());
-        ClientTraceLog.info(String.format(DN_CLIENTTRACE_FORMAT, inAddr,
-            myAddr, block.getNumBytes(), "HDFS_WRITE", clientname, offset,
-            dnR.getDatanodeUuid(), block, endTime - startTime));
-      } else {
-        LOG.info("Received " + block + " size " + block.getNumBytes()
-            + " from " + inAddr);
-      }
+        final long endTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime()
+                : 0;
+        block.setNumBytes(replicaInfo.getNumBytes());
+
+        datanode.data.finalizeBlock(block);
+
+        datanode.closeBlock(block, DataNode.EMPTY_DEL_HINT, replicaInfo.getStorageUuid());
+        if (ClientTraceLog.isInfoEnabled() && isClient) {
+            long offset = 0;
+            DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block
+                    .getBlockPoolId());
+            ClientTraceLog.info(String.format(DN_CLIENTTRACE_FORMAT, inAddr,
+                    myAddr, block.getNumBytes(), "HDFS_WRITE", clientname, offset,
+                    dnR.getDatanodeUuid(), block, endTime - startTime));
+        } else {
+            LOG.info("Received " + block + " size " + block.getNumBytes()
+                    + " from " + inAddr);
+        }
     }
 
     /**
