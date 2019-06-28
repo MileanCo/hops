@@ -39,32 +39,12 @@ public class S3ConsistentRead {
 
     // TODO: detect when we know block is supposed to be null and dont bother checking?
     public Block getS3Block(long blockId, String bpid, long genStamp) {
-        // first check NN if this block is even supposed to exist
-        // TODO if we do get a NULL suddenly from NN, do we abandon this??
-//        // also Dont get blocks belonging to other blockpools... some tests will fail
-//        if (Arrays.asList(s3dataset.volumeMap.getBlockPoolList()).contains(bpid)) {
-//            try {
-//                blockMetadata = s3dataset.getNameNodeClient().getCompletedBlockMeta(blockId);
-//                LOG.info("Got block " + blockId + " from NN: " + blockMetadata);
-//            } catch (IOException e) {
-//                LOG.error(e);
-//            }
-//        } else {
-//            LOG.error("DN tried to access a blockpool it doesnt own: " + bpid);
-//        }
-//        if (blockMetadata == null) {
-//            return null;
-//        }
-
         String block_aws_key_str = S3DatasetImpl.getBlockKey(bpid, blockId, genStamp);
-//        String block_meta_aws_key_str = S3DatasetImpl.getMetaKey(bpid, blockId, genStamp);
         Path block_aws_key = new Path(block_aws_key_str);
         try {
             ObjectMetadata s3Object_meta = s3dataset.getS3AFileSystem().getObjectMetadata(block_aws_key);
-            // TODO: why does normal HDFS have GS on meta filename but not block filename??
             // Since the GS is part of the key, we dont need to take it from the filename or metadata
             long blockGS = genStamp;
-//            long blockGS = Long.parseLong(s3Object_meta.getUserMetadata().get("generationstamp"));
             Block b = new Block(blockId, s3Object_meta.getInstanceLength(), blockGS);
 
             if (genStamp != blockGS) {
@@ -93,20 +73,14 @@ public class S3ConsistentRead {
         Path block_meta_aws_key = new Path(block_meta_aws_key_str);
         LOG.info("Getting meta " + s3dataset.getBucket() + ":" + block_meta_aws_key);
         try {
-            // TODO: call this with num_bytes of meta block file so that we avoid RR to S3
-//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_meta_aws_key);
-//            return in.getWrappedStream();
-//            
+            // we use S3 SDK instead of S3A because S3A checks file status before getting block stream (S3AFileSystem.open)
             GetObjectRequest metaObjReq = new GetObjectRequest(s3dataset.getBucket(), block_meta_aws_key_str);
             if (seekOffset > 0) {
                 metaObjReq.setRange(seekOffset);
             }
             S3Object meta_s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(metaObjReq);
             return new LengthInputStream(meta_s3_obj.getObjectContent(), meta_s3_obj.getObjectMetadata().getContentLength());
-
-//        } catch (IOException err) {
-//            // S3Guard exceptions appear here
-//            throw new CustomRuntimeException(err.getMessage());
+            
         } catch (AmazonS3Exception err) {
             LOG.error(block_meta_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
@@ -129,24 +103,14 @@ public class S3ConsistentRead {
         LOG.info("Getting block " + s3dataset.getBucket() + ":" + block_aws_key + " with seekOffset " + seekOffset);
 
         try {
-            // use the new custom open method that skips doing a fileStatus check
-//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key, b.getNumBytes());
-//            FSDataInputStream in = s3dataset.getS3AFileSystem().open(block_aws_key);
-//            if (seekOffset > 0) {
-//                in.seek(seekOffset);
-//            }
-//            return in.getWrappedStream();
-
+            // we use S3 SDK instead of S3A because S3A checks file status before getting block stream (S3AFileSystem.open)
             GetObjectRequest objReq = new GetObjectRequest(s3dataset.getBucket(), block_aws_key_str);
             if (seekOffset > 0) {
                 objReq.setRange(seekOffset);
             }
             S3Object s3_obj = s3dataset.getS3AFileSystem().getS3Client().getObject(objReq);
             return s3_obj.getObjectContent();
-
-//        } catch (IOException err) {
-//            // S3Guard exceptions appear here
-//            throw new CustomRuntimeException(err.getMessage());
+            
         } catch (AmazonS3Exception err) {
             LOG.error(block_aws_key_str + " : " + err);
             if (! err.toString().contains("404 Not Found")) {
