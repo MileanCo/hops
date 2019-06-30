@@ -39,9 +39,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
     private S3AFileSystemCommon s3afs;
     private DatanodeProtocolClientSideTranslatorPB namenode;
     
-    // Map of block pool Id to another map of block Id to S3FinalizedReplica
-    private Map<String, Map<Long, S3FinalizedReplica>> downloadedBlocksMap = new HashMap<>();
-    
     /**
      * An FSDataset has a directory where it loads its data files.
      *
@@ -55,7 +52,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
         // create new voluemMap that checks S3 if block is not found locally
         super.volumeMap = new S3ReplicaMap(this, this);
         bucket = conf.get(DFSConfigKeys.S3_DATASET_BUCKET, "");
-        
         
         Class<? extends S3AFileSystemCommon> s3AFilesystemClass = conf.getClass(
                 DFSConfigKeys.S3A_IMPL, S3AFileSystemCommon.class,
@@ -301,7 +297,8 @@ public class S3DatasetImpl extends FsDatasetImpl {
         ExtendedBlock old_b = new ExtendedBlock(b.getBlockPoolId(), b.getBlockId(), b.getNumBytes(), b.getGenerationStamp());
         old_b.setGenerationStamp(old_b.getGenerationStamp() - 1);
         
-        // TODO: performance improvement... defer delete until later?
+        // TODO: This is needed to delete old block versions (append leaves them behind).
+        //   Can do performance improvement... defer delete until later? (or append should delete prev block?)
         if (contains(old_b)) {
             s3afs.delete(new Path(getBlockKey(old_b)), false);
             s3afs.delete(new Path(getMetaKey(old_b)), false);
@@ -393,7 +390,7 @@ public class S3DatasetImpl extends FsDatasetImpl {
             finalizedReplicaInfo.unlinkBlock(1);
         }
 
-        // TODO: finalizedReplica shouldnt have a vol
+        // TODO: finalizedReplica doesnt have a vol anymore theoretically
         FsVolumeImpl v = (FsVolumeImpl) finalizedReplicaInfo.getVolume();
         if (v.getAvailable() < estimateBlockLen - finalizedReplicaInfo.getNumBytes()) {
             throw new DiskChecker.DiskOutOfSpaceException(
@@ -460,7 +457,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
         ReplicaInfo r = volumeMap.get(bpid, blockId);
         if (r == null) {
             throw new CustomRuntimeException("To get an S3 Finalized Replica you need to provide the generation stamp.");
-//            return getS3FinalizedReplica(bpid, blockId);
         }
         switch (r.getState()) {
             case FINALIZED:
@@ -499,7 +495,6 @@ public class S3DatasetImpl extends FsDatasetImpl {
     //
     // Methods not needed for s3:
     //
-    
     /**
      * Get the list of finalized blocks from in-memory blockmap for a block pool.
      */
